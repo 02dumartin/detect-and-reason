@@ -1,0 +1,37 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+# Egg info
+*.egg-info/
+*.egg
+
+# Data 
+data/
+*.jpg
+*.txt
+
+# Runs
+runs/
+
+# Result
+result/
+
+# weights
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/

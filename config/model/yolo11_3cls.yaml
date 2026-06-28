@@ -1,0 +1,108 @@
+name: yolo11_3cls
+family: yolo11
+framework: ultralytics
+class_mode: 3cls
+mode: detection_only
+
+model:
+  init_weight: yolo11l.pt
+
+class_names:
+  0: fully ripened tomato
+  1: half ripened tomato
+  2: green tomato
+
+train:
+  epochs: 150
+  imgsz: 640
+  batch: 12
+  workers: 8
+  run_name: yolo11_3cls
+
+  augmentation:
+    mosaic: 0.2
+    close_mosaic: 10
+    mixup: 0.1
+    scale: 0.2
+    translate: 0.1
+    degrees: 10
+    fliplr: 0.5
+    hsv_h: 0.015
+    hsv_s: 0.2
+    hsv_v: 0.2
+
+  patience: 10
+  amp: true
+  optimizer: AdamW
+  lr0: 0.001
+  lrf: 0.01
+  cos_lr: true
+
+val:
+  split: test
+  plots: true
+  conf: null
+  agnostic_nms: false
+  iou_default:
+    small: 0.5
+    default: 0.7
+
+predict:
+  save: true
+  save_txt: true
+  save_conf: true
+  conf: 0.25
+  agnostic_nms: false
+  iou_default:
+    small: 0.5
+    default: 0.7
+
+metrics:
+  - mAP50
+  - mAP50_95
+  - detection_acc
+  - classification_acc
+  - overall_acc
+
+dataset_overrides:
+  big:
+    source_dataset: laboro_big_3cls
+    cache: disk
+    data_yaml: data/yolo/laboro_big_3cls/data.yaml
+    test_image_source: data/yolo/laboro_big_3cls/test/images
+    runs_dir: runs/big/yolo11_3cls
+    eval_dir: result/detection_only/big/yolo11_3cls_eval
+    prediction_dir: result/detection_only/big/yolo11_3cls_prediction
+
+  little:
+    source_dataset: laboro_little_3cls
+    cache: disk
+    data_yaml: data/yolo/laboro_little_3cls/data.yaml
+    test_image_source: data/yolo/laboro_little_3cls/test/images
+    runs_dir: runs/little/yolo11_3cls
+    eval_dir: result/detection_only/little/yolo11_3cls_eval
+    prediction_dir: result/detection_only/little/yolo11_3cls_prediction
+
+  tomatod:
+    source_dataset: tomatod_3cls
+    cache: ram
+    data_yaml: data/yolo/tomatod_3cls/data.yaml
+    test_image_source: data/yolo/tomatod_3cls/test/images
+    runs_dir: runs/tomatod/yolo11_3cls
+    eval_dir: result/detection_only/tomatod/yolo11_3cls_eval
+    prediction_dir: result/detection_only/tomatod/yolo11_3cls_prediction
+
+  merge:
+    source_dataset: merge_3cls
+    cache: disk
+    data_yaml: data/yolo/merge_3cls/data.yaml
+    test_image_source: data/yolo/merge_3cls/test/images
+    runs_dir: runs/merge/yolo11_3cls
+    eval_dir: result/detection_only/merge/yolo11_3cls_eval
+    prediction_dir: result/detection_only/merge/yolo11_3cls_prediction
+
+notes:
+  - small is an experiment alias; actual dataset source is laboro_little_3cls
+  - val() in the current script does not pass conf explicitly
+  - predict() uses conf=0.25
+  - big, tomatod, merge use default iou=0.7; little uses iou=0.5

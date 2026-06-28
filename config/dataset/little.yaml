@@ -1,0 +1,22 @@
+name: laboro_little
+
+variants:
+  3cls:
+    path: /data/yolo/laboro_little_3cls
+    train: /data/yolo/laboro_little_3cls/train
+    val: /data/yolo/laboro_little_3cls/val
+    test: /data/yolo/laboro_little_3cls/test
+    data_yaml: /data/yolo/laboro_little_3cls/data.yaml
+    class_names:
+      0: adj_fully ripened tomato
+      1: adj_half ripened tomato
+      2: adj_green tomato
+
+  1cls:
+    path: /data/yolo/laboro_little_1cls
+    train: /data/yolo/laboro_little_1cls/train
+    val: /data/yolo/laboro_little_1cls/val
+    test: /data/yolo/laboro_little_1cls/test
+    data_yaml: /data/yolo/laboro_little_1cls/data.yaml
+    class_names:
+      0: tomato
