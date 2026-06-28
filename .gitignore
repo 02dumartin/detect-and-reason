@@ -34,4 +34,5 @@ result/
 logs/
 
 # Temporary files
-tmp/
+tmp/*.pt
+*.pt
