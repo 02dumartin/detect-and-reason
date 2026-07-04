@@ -6,6 +6,23 @@ from src.model.model_builder import build_model
 
 
 def run_predict(runtime_cfg: dict):
+    if runtime_cfg.get("family") == "rf_detr":
+        from src.model.rf_detr_runner import run_rf_detr_predict
+
+        return run_rf_detr_predict(runtime_cfg)
+    if runtime_cfg.get("family") == "dino":
+        from src.model.dino_runner import run_dino_predict
+
+        return run_dino_predict(runtime_cfg)
+    if runtime_cfg.get("family") == "grounding_dino_zs":
+        from src.model.grounding_dino_zs import run_grounding_dino_predict
+
+        return run_grounding_dino_predict(runtime_cfg)
+    if runtime_cfg.get("family") == "owl_vit_zs":
+        from src.model.owl_vit_zs import run_owl_vit_predict
+
+        return run_owl_vit_predict(runtime_cfg)
+
     model = build_model(runtime_cfg)
 
     predict_cfg = runtime_cfg.get("predict", {})

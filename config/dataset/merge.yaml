@@ -5,7 +5,7 @@ variants:
     path: /data/yolo/merge_3cls
     train: /data/yolo/merge_3cls/train
     val: /data/yolo/merge_3cls/val
-    #test: /data/yolo/merge_3cls/test
+    test: /data/yolo/merge_3cls/test
     data_yaml: /data/yolo/merge_3cls/data.yaml
     class_names:
       0: fully ripened tomato
@@ -16,7 +16,7 @@ variants:
     path: /data/yolo/merge_1cls
     train: /data/yolo/merge_1cls/train
     val: /data/yolo/merge_1cls/val
-    #test: /data/yolo/merge_1cls/test
+    test: /data/yolo/merge_1cls/test
     data_yaml: /data/yolo/merge_1cls/data.yaml
     class_names:
       0: tomato

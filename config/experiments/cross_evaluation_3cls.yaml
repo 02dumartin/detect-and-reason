@@ -1,0 +1,56 @@
+name: cross_3cls_detection_only
+task: detection_only
+class_mode: 3cls
+split: test
+
+models:
+  - yolo11_3cls
+  - yolo12_3cls
+  - yolo_world_3cls
+  - rt_detr_3cls
+  - rf_detr_3cls
+  - dino_3cls
+
+rows:
+  - train_label: TomatOD
+    train_dataset_ref: tomatod
+    eval_dataset_refs: [tomatod, big, little, custom_tomato]
+
+  - train_label: LaboroBig
+    train_dataset_ref: big
+    eval_dataset_refs: [tomatod, big, little, custom_tomato]
+
+  - train_label: LaboroLittle
+    train_dataset_ref: little
+    eval_dataset_refs: [tomatod, big, little, custom_tomato]
+
+  - train_label: Merge
+    train_dataset_ref: merge
+    eval_dataset_refs: [tomatod, big, little]
+
+runtime:
+  predict: true
+  evaluate: true
+  overlay: false
+  aggregate: true
+  reuse_predictions: true
+  max_images: 50
+
+threshold_policy:
+  mode: inherit_model
+
+outputs:
+  root: result/cross_validation/3cls_detection_only
+  prediction_dir_tpl: "{root}/{train_dataset_ref}__to__{eval_dataset_ref}/{model}/prediction"
+  eval_dir_tpl: "{root}/{train_dataset_ref}__to__{eval_dataset_ref}/{model}/evaluation"
+  overlay_dir_tpl: "{root}/{train_dataset_ref}__to__{eval_dataset_ref}/{model}/overlay"
+  benchmark_dir: "benchmark/cross_validation/3cls_detection_only"
+
+metrics:
+  - Detection Acc
+  - Classification Acc
+  - Overall Acc
+  - mAP@0.5
+  - mAP@0.5:0.95
+  - Precision
+  - Recall

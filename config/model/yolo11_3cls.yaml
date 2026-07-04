@@ -5,7 +5,7 @@ class_mode: 3cls
 mode: detection_only
 
 model:
-  init_weight: yolo11l.pt
+  init_weight: weights/yolo11l.pt
 
 class_names:
   0: fully ripened tomato
@@ -48,7 +48,7 @@ val:
     default: 0.7
 
 predict:
-  save: true
+  save: false
   save_txt: true
   save_conf: true
   conf: 0.25
@@ -98,8 +98,6 @@ dataset_overrides:
     data_yaml: data/yolo/merge_3cls/data.yaml
     test_image_source: data/yolo/merge_3cls/test/images
     runs_dir: runs/merge/yolo11_3cls
-    eval_dir: result/detection_only/merge/yolo11_3cls_eval
-    prediction_dir: result/detection_only/merge/yolo11_3cls_prediction
 
 notes:
   - small is an experiment alias; actual dataset source is laboro_little_3cls

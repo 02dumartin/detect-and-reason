@@ -1,0 +1,183 @@
+#!/usr/bin/env bash
+#
+# train_1cls.sh — 1cls 모델 학습 (+선택적으로 eval / overlay)
+#
+# yolo11/12 · yolo_world · rt_detr · rf_detr · dino 를 1cls로 학습한다.
+# 각 모델 학습이 끝나면 --eval / --overlay 로 평가·시각화까지 이어서 할 수 있다.
+# (집계 표는 만들지 않는다 — 모델별 결과만 남긴다. 비교표는 scripts/benchmark.sh 담당.)
+#
+# 사용 예:
+#   ./scripts/train_1cls.sh                               # 학습만 (기존 동작)
+#   ./scripts/train_1cls.sh --eval --overlay              # 학습 + 평가 + 시각화
+#   TRAIN_GPU=1 ./scripts/train_1cls.sh --eval
+#   PYBIN=/home/dongyub/tomato_detect/.venv/bin/python ./scripts/train_1cls.sh --eval --overlay
+#
+# 옵션:
+#   --gpu N        사용할 GPU (기본 1, 환경변수 TRAIN_GPU)
+#   --eval         각 모델 학습 직후 predict + 평가 (모델별 metrics 산출)
+#   --overlay      각 모델 학습 직후 예측 overlay 이미지 생성
+#   --split NAME   eval/overlay 대상 split (기본 test)
+#   --python PATH  인터프리터 지정 (환경변수 PYBIN, 기본 python)
+#   --models "..." 이 모델들만 실행 (재학습 범위 제한). 예: --models "dino_1cls"
+#
+#   * --eval / --overlay 는 torch/pandas/PIL 등이 필요하다. 부족하면 PYBIN 으로 venv 지정.
+
+set -uo pipefail
+cd "$(dirname "$0")/.."
+
+GPU="${TRAIN_GPU:-1}"
+DO_EVAL=0
+DO_OVERLAY=0
+SPLIT=test
+PY="${PYBIN:-python}"
+MODELS_FILTER=""             # 비우면 전체. 지정하면 그 모델들만 (예: "dino_1cls")
+DATASETS_FILTER=""           # 비우면 전체. 지정하면 그 데이터셋만 (예: "big little")
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --gpu)      GPU="$2"; shift 2 ;;
+    --eval)     DO_EVAL=1; shift ;;
+    --overlay)  DO_OVERLAY=1; shift ;;
+    --split)    SPLIT="$2"; shift 2 ;;
+    --python)   PY="$2"; shift 2 ;;
+    --models)   MODELS_FILTER="$2"; shift 2 ;;
+    --datasets) DATASETS_FILTER="$2"; shift 2 ;;
+    *) echo "unknown arg: $1" >&2; exit 1 ;;
+  esac
+done
+
+# $2(whitelist)에 있는 항목만 배열 $1 에 남긴다. whitelist 가 비면 그대로 둔다.
+_filter() {
+  [[ -z "$2" ]] && return 0
+  local -n arr="$1"
+  local kept=() item w
+  for item in "${arr[@]}"; do
+    for w in $2; do
+      if [[ "$item" == "$w" ]]; then kept+=("$item"); break; fi
+    done
+  done
+  arr=("${kept[@]+"${kept[@]}"}")
+}
+
+# eval/overlay 를 켰다면 인터프리터에 필요한 패키지가 있는지 먼저 확인한다.
+if [[ "$DO_EVAL" -eq 1 || "$DO_OVERLAY" -eq 1 ]]; then
+  if ! "$PY" -c "import torch, pandas, PIL" >/dev/null 2>&1; then
+    echo "[train_1cls][경고] '$PY' 에 eval/overlay 용 패키지(torch/pandas/PIL)가 없습니다."
+    echo "  PYBIN 으로 풀스택 venv 를 지정하세요. 예:"
+    echo "    PYBIN=/home/dongyub/tomato_detect/.venv/bin/python $0 $*"
+    exit 1
+  fi
+fi
+
+MODELS_1CLS=(yolo11_1cls yolo12_1cls yolo_world_1cls rt_detr_1cls rf_detr_1cls dino_1cls)
+DATASETS_1CLS=(big little tomatod merge custom_tomato)
+
+_filter MODELS_1CLS "$MODELS_FILTER"
+# --datasets 는 치환(기본에 없는 merge_big 등도 지정 가능). 안 주면 기본 매트릭스 유지.
+if [[ -n "$DATASETS_FILTER" ]]; then
+  DATASETS_1CLS=($DATASETS_FILTER)
+fi
+
+family_of() {
+  "$PY" -c "import yaml;print((yaml.safe_load(open('config/model/$1.yaml')) or {}).get('family',''))" 2>/dev/null
+}
+
+# 학습 직후 predict + (eval / overlay). family 에 따라 yolo 경로 / coco 경로로 분기.
+post_job() {
+  local gpu="$1" model="$2" dataset="$3"
+  [[ "$DO_EVAL" -eq 0 && "$DO_OVERLAY" -eq 0 ]] && return 0
+
+  local family; family="$(family_of "$model")"
+  local is_coco=0
+  [[ "$family" == "rf_detr" || "$family" == "dino" ]] && is_coco=1
+
+  # 1) predict (eval/overlay 가 공유)
+  echo "[post] predict: $model x $dataset (family=$family)"
+  if [[ "$is_coco" -eq 1 ]]; then
+    CUDA_VISIBLE_DEVICES="$gpu" "$PY" scripts/train_model.py --model "$model" --dataset "$dataset" --stage predict \
+      || { echo "[warn] predict 실패: $model x $dataset (eval/overlay 건너뜀)"; return 0; }
+  else
+    CUDA_VISIBLE_DEVICES="$gpu" "$PY" scripts/predict_yolo_labels.py --model "$model" --dataset "$dataset" --source "$SPLIT" \
+      || { echo "[warn] predict 실패: $model x $dataset (eval/overlay 건너뜀)"; return 0; }
+  fi
+
+  # 2) eval (모델별 metrics 만 — 집계 없음)
+  if [[ "$DO_EVAL" -eq 1 ]]; then
+    echo "[post] eval: $model x $dataset"
+    if [[ "$is_coco" -eq 1 ]]; then
+      "$PY" scripts/evaluate_coco_predictions.py --model "$model" --dataset "$dataset" --split "$SPLIT" \
+        || echo "[warn] eval 실패: $model x $dataset"
+    else
+      "$PY" scripts/evaluate_yolo_predictions.py --model "$model" --dataset "$dataset" --split "$SPLIT" \
+        || echo "[warn] eval 실패: $model x $dataset"
+    fi
+  fi
+
+  # 3) overlay
+  if [[ "$DO_OVERLAY" -eq 1 ]]; then
+    echo "[post] overlay: $model x $dataset"
+    if [[ "$is_coco" -eq 1 ]]; then
+      "$PY" scripts/render_coco_overlays.py --model "$model" --dataset "$dataset" --split "$SPLIT" \
+        || echo "[warn] overlay 실패: $model x $dataset"
+    else
+      "$PY" scripts/render_yolo_overlays.py --model "$model" --dataset "$dataset" --split "$SPLIT" \
+        || echo "[warn] overlay 실패: $model x $dataset"
+    fi
+  fi
+}
+
+run_job() {
+  local gpu="$1"
+  local model="$2"
+  local dataset="$3"
+
+  echo "------------------------------------------------------------------"
+  echo "[train] gpu=${gpu} model=${model} dataset=${dataset}"
+  if ! CUDA_VISIBLE_DEVICES="$gpu" "$PY" scripts/train_model.py --model "$model" --dataset "$dataset" --stage train; then
+    echo "[fail] gpu=${gpu} model=${model} dataset=${dataset}"
+    return 1
+  fi
+  echo "[done] train gpu=${gpu} model=${model} dataset=${dataset}"
+  post_job "$gpu" "$model" "$dataset"
+}
+
+run_matrix() {
+  local gpu="$1"
+  local label="$2"
+  local models_name="$3"
+  local datasets_name="$4"
+  local failures=0
+
+  local -n models_ref="$models_name"
+  local -n datasets_ref="$datasets_name"
+
+  echo "=================================================================="
+  echo "[group] ${label} gpu=${gpu}"
+  echo "[group] models  : ${models_ref[*]}"
+  echo "[group] datasets: ${datasets_ref[*]}"
+
+  for model in "${models_ref[@]}"; do
+    for dataset in "${datasets_ref[@]}"; do
+      if ! run_job "$gpu" "$model" "$dataset"; then
+        failures=1
+      fi
+    done
+  done
+
+  return "$failures"
+}
+
+echo "[train_1cls] gpu=${GPU} eval=${DO_EVAL} overlay=${DO_OVERLAY} split=${SPLIT} py=${PY}"
+echo "[train_1cls] 1cls (6 models x 5 ds = 30 jobs)"
+
+STATUS=0
+run_matrix "$GPU" "1cls" MODELS_1CLS DATASETS_1CLS || STATUS=1
+
+echo "=================================================================="
+if [[ "$STATUS" -eq 0 ]]; then
+  echo "[train_1cls] all train jobs finished successfully"
+else
+  echo "[train_1cls] finished with failures"
+fi
+
+exit "$STATUS"

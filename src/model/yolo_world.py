@@ -13,4 +13,3 @@ def build_yolo_world_model(runtime_cfg: dict) -> YOLOWorld:
     if prompts:
         model.set_classes(prompts)
     return model
-

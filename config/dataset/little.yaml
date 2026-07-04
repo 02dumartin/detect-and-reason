@@ -8,9 +8,9 @@ variants:
     test: /data/yolo/laboro_little_3cls/test
     data_yaml: /data/yolo/laboro_little_3cls/data.yaml
     class_names:
-      0: adj_fully ripened tomato
-      1: adj_half ripened tomato
-      2: adj_green tomato
+      0: fully ripened tomato
+      1: half ripened tomato
+      2: green tomato
 
   1cls:
     path: /data/yolo/laboro_little_1cls

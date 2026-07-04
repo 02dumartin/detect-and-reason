@@ -1,0 +1,55 @@
+name: rf_detr_2cls
+family: rf_detr
+framework: rfdetr
+class_mode: 2cls
+mode: detection_only
+
+model:
+  model_size: large
+  init_weight: weights/rf-detr-large-2026.pth
+
+class_names:
+  0: ripe
+  1: unripe
+
+train:
+  epochs: 150
+  imgsz: 640
+  batch_size: 4
+  grad_accum_steps: 3  # 유효 배치 4x3=12 (ultralytics 모델들과 동일하게 맞춤)
+  lr: 1.0e-4
+  lr_encoder: 1.5e-4
+  weight_decay: 1.0e-4
+  use_ema: true
+  ema_decay: 0.993
+  early_stopping: true
+  early_stopping_patience: 10
+  early_stopping_min_delta: 0.001
+  num_workers: 2
+  tensorboard: true
+
+val:
+  split: test
+  conf_threshold: 0.01
+  score_threshold_prf1: 0.5
+  iou_threshold_prf1: 0.5
+
+predict:
+  conf: 0.25
+  splits:
+    - test
+  save_visualizations: false
+
+metrics:
+  - mAP50
+  - mAP50_95
+
+dataset_overrides:
+  custom_tomato:
+    source_dataset: custom_tomato_2cls
+    data_yaml: data/yolo/custom_tomato_2cls/data.yaml
+    rfdetr_dir: data/coco/custom_tomato_2cls
+    test_image_source: data/custom_tomato_dataset/custom_tomato_data_yolo/images/test
+    runs_dir: runs/custom_tomato/rf_detr_2cls
+    eval_dir: result/detection_only/custom_tomato/rf_detr_2cls_eval
+    prediction_dir: result/detection_only/custom_tomato/rf_detr_2cls_prediction

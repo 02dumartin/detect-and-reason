@@ -1,12 +1,21 @@
 from __future__ import annotations
 
 from src.model.model_builder import build_model
+from src.model.rf_detr_runner import run_rf_detr_train
 
 
 def run_train(runtime_cfg: dict):
+    if runtime_cfg.get("family") == "rf_detr":
+        return run_rf_detr_train(runtime_cfg)
+    if runtime_cfg.get("family") == "dino":
+        from src.model.dino_runner import run_dino_train
+
+        return run_dino_train(runtime_cfg)
+
     model = build_model(runtime_cfg)
 
     train_cfg = runtime_cfg.get("train", {})
+    val_cfg = runtime_cfg.get("val", {})
     dataset_cfg = runtime_cfg["dataset"]
     runs_dir = runtime_cfg["paths"]["runs_dir"]
     runs_dir.mkdir(parents=True, exist_ok=True)
@@ -24,6 +33,14 @@ def run_train(runtime_cfg: dict):
         "lr0": train_cfg.get("lr0"),
         "lrf": train_cfg.get("lrf"),
         "cos_lr": train_cfg.get("cos_lr"),
+        # Ultralytics train-time validation defaults to val split + library defaults
+        # unless we forward the validation block explicitly.
+        "split": val_cfg.get("resolved_split"),
+        "plots": val_cfg.get("plots"),
+        "conf": val_cfg.get("conf"),
+        "iou": val_cfg.get("resolved_iou"),
+        "agnostic_nms": val_cfg.get("agnostic_nms"),
+        "max_det": val_cfg.get("max_det"),
         "project": str(runs_dir.parent),
         "name": runs_dir.name,
         "exist_ok": True,

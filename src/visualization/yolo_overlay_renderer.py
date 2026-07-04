@@ -20,6 +20,11 @@ DEFAULT_COLOR_MAP_RGB = {
     "unripe": (106, 254, 152),
     "none": (180, 180, 180),
 }
+CANONICAL_3CLS_LABELS = {
+    0: "fully-ripe",
+    1: "semi-ripe",
+    2: "unripe",
+}
 
 
 def save_yolo_label_overlays(
@@ -35,14 +40,9 @@ def save_yolo_label_overlays(
     label_only: bool | None = None,
     max_images: int | None = None,
 ) -> int:
-    """YOLO txt 기반 bbox overlay 이미지를 저장한다.
+    """YOLO txt 기반 bbox overlay 이미지를 저장    
 
-    핵심 목표는 두 가지다.
-    1. 예측/정답 txt만 있으면 바로 시각화할 수 있을 것
-    2. 색상과 라벨 스타일은 `tomato-detection-agentic`와 같은 감각으로 유지할 것
-
-    따라서 실제 렌더링 옵션은 코드 기본값 + YAML 설정 + CLI override 순서로
-    합쳐서 사용한다.
+    실제 렌더링 옵션은 코드 기본값 + YAML 설정 + CLI override 순서로 합쳐서 사용
     """
     labels_dir = Path(labels_dir).resolve()
     output_dir = Path(output_dir)
@@ -83,7 +83,7 @@ def save_yolo_label_overlays(
             if overlay_options["honor_exif"] and overlay_options["transform_bbox_with_exif"] and orientation in {3, 6, 8}:
                 bbox_xyxy = _transform_bbox_xyxy_exif(bbox_xyxy, raw_width, raw_height, orientation)
 
-            label = class_name_map.get(class_id, str(class_id))
+            label = _resolve_display_label(class_id, class_name_map)
             color = _resolve_label_color(label, overlay_options["color_map_rgb"])
             _draw_detection(
                 draw=draw,
@@ -144,6 +144,23 @@ def _resolve_label_color(label: str, color_map_rgb: dict[str, tuple[int, int, in
     return color_map_rgb.get(normalized, color_map_rgb.get("none", DEFAULT_COLOR_MAP_RGB["none"]))
 
 
+def _resolve_display_label(class_id: int, class_name_map: dict[int, str]) -> str:
+    """3클래스 ripeness overlay는 class id 기준의 canonical 라벨을 직접 사용한다."""
+    fallback = class_name_map.get(int(class_id), str(class_id))
+    if _should_force_canonical_3cls_labels(class_name_map):
+        return CANONICAL_3CLS_LABELS.get(int(class_id), fallback)
+    return fallback
+
+
+def _should_force_canonical_3cls_labels(class_name_map: dict[int, str]) -> bool:
+    """1cls overlay를 깨뜨리지 않도록 ripeness 3cls 케이스에서만 강제 라벨링한다."""
+    if set(class_name_map.keys()) != set(CANONICAL_3CLS_LABELS.keys()):
+        return False
+
+    normalized_names = {_normalize_ripeness_key(name) for name in class_name_map.values()}
+    return normalized_names == {"fully-ripe", "semi-ripe", "unripe"}
+
+
 def _normalize_ripeness_key(label: str) -> str:
     """프로젝트마다 조금씩 다른 클래스 이름 표기를 공통 키로 맞춘다."""
     normalized = str(label).strip().lower().replace("_", " ")
@@ -151,13 +168,14 @@ def _normalize_ripeness_key(label: str) -> str:
     if normalized.startswith("adj "):
         normalized = normalized[4:]
 
-    if "fully" in normalized or "ripe" in normalized:
-        if "half" not in normalized and "semi" not in normalized:
-            return "fully-ripe"
+    # "unripe"/"green"(미숙)을 먼저 처리한다. 그러지 않으면 "unripe" 안의 "ripe"
+    # 부분 문자열 때문에 익음(fully-ripe)으로 오분류되어 빨강으로 칠해진다.
+    if "unripe" in normalized or "green" in normalized:
+        return "unripe"
     if "half" in normalized or "semi" in normalized:
         return "semi-ripe"
-    if "green" in normalized or "unripe" in normalized:
-        return "unripe"
+    if "fully" in normalized or "ripe" in normalized:
+        return "fully-ripe"
     return "none"
 
 

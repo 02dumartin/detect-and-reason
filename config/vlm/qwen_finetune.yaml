@@ -1,0 +1,10 @@
+name: reserved_for_future_sft
+
+backend:
+  type: qwen_hf
+  model_name: Qwen/Qwen3-VL-4B-Instruct
+
+prompt:
+  use_examples: false
+  use_reasoning: true
+

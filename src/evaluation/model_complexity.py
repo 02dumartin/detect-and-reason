@@ -43,10 +43,18 @@ def estimate_ultralytics_model_complexity(
             "note": "ultralytics is not installed; complexity skipped",
         }
 
-    model = YOLO(str(weight_path.resolve()))
-    torch_model = model.model
+    try:
+        model = YOLO(str(weight_path.resolve()))
+        torch_model = model.model
+        total_params = sum(parameter.numel() for parameter in torch_model.parameters())
+    except Exception:
+        # ultralytics 로 못 읽는 체크포인트(rf_detr / dino 등) → state_dict 로 파라미터만 집계.
+        # GFLOPs 는 forward 가 필요해 생략한다.
+        return _complexity_from_state_dict(
+            weight_path,
+            note="non-ultralytics checkpoint; params from state_dict, GFLOPs skipped",
+        )
 
-    total_params = sum(parameter.numel() for parameter in torch_model.parameters())
     trainable_params = sum(parameter.numel() for parameter in torch_model.parameters() if parameter.requires_grad)
     model_size_mb = sum(parameter.numel() * 4 for parameter in torch_model.parameters()) / (1024**2)
 
@@ -75,3 +83,42 @@ def estimate_ultralytics_model_complexity(
     if gflops_note is not None:
         result["note"] = gflops_note
     return result
+
+
+def _extract_state_dict(checkpoint: Any) -> dict:
+    """torch 체크포인트에서 파라미터 텐서가 담긴 state_dict 를 꺼낸다."""
+    if isinstance(checkpoint, dict):
+        for key in ("model", "state_dict"):
+            if isinstance(checkpoint.get(key), dict):
+                return checkpoint[key]
+        ema = checkpoint.get("ema")
+        if isinstance(ema, dict):
+            return ema.get("module", ema)
+        return checkpoint
+    return {}
+
+
+def _complexity_from_state_dict(weight_path: Path, *, note: str) -> dict[str, Any]:
+    """ultralytics 가 아닌 체크포인트(rf_detr/dino)의 파라미터 수를 state_dict 로 센다."""
+    try:
+        checkpoint = torch.load(str(weight_path), map_location="cpu", weights_only=False)
+    except TypeError:  # 구버전 torch 는 weights_only 인자 없음
+        checkpoint = torch.load(str(weight_path), map_location="cpu")
+    except Exception as exc:
+        return {
+            "weight_reference": str(weight_path.resolve()),
+            "params_m": None,
+            "gflops": None,
+            "note": f"param count failed: {exc}",
+        }
+
+    state = _extract_state_dict(checkpoint)
+    total_params = sum(int(tensor.numel()) for tensor in state.values() if hasattr(tensor, "numel"))
+    return {
+        "weight_reference": str(weight_path.resolve()),
+        "total_params": int(total_params),
+        "params_m": float(total_params / 1e6) if total_params else None,
+        "model_size_mb": float(total_params * 4 / (1024**2)) if total_params else None,
+        "gflops": None,
+        "note": note,
+    }

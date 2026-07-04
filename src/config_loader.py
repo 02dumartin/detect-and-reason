@@ -69,7 +69,7 @@ def load_yaml(path: Path) -> dict:
 
 def resolve_model_config_path(model_ref: str) -> Path:
     """모델 설정 이름 또는 파일 경로를 실제 YAML 파일 경로로 바꾼다."""
-    return _resolve_config_path(model_ref, "config/model")
+    return _resolve_config_path(model_ref, ["config/model", "config/zeroshot"])
 
 
 def resolve_dataset_config_path(dataset_ref: str) -> Path:
@@ -117,6 +117,12 @@ def resolve_runtime_config(
         variant.get("data_yaml"),
         project_root=project_root,
     )
+    rfdetr_dir = _resolve_first_existing_like(
+        dataset_override.get("rfdetr_dir"),
+        variant.get("rfdetr_dir"),
+        f"data/coco/{output_name_for_rfdetr(dataset_key, class_mode)}",
+        project_root=project_root,
+    )
 
     train_cfg = dict(model_cfg.get("train", {}))
     val_cfg = dict(model_cfg.get("val", {}))
@@ -124,18 +130,19 @@ def resolve_runtime_config(
 
     output_mode = model_cfg.get("mode", "detection_only")
     model_name = model_cfg.get("name", model_path.stem)
+    family = model_cfg.get("family")
 
-    runs_dir = _resolve_first_existing_like(
+    runs_dir = _resolve_preferred_path(
         dataset_override.get("runs_dir"),
         f"runs/{dataset_key}/{model_name}",
         project_root=project_root,
     )
-    eval_dir = _resolve_first_existing_like(
+    eval_dir = _resolve_preferred_path(
         dataset_override.get("eval_dir"),
         f"result/{output_mode}/{dataset_key}/{model_name}_eval",
         project_root=project_root,
     )
-    prediction_dir = _resolve_first_existing_like(
+    prediction_dir = _resolve_preferred_path(
         dataset_override.get("prediction_dir"),
         f"result/{output_mode}/{dataset_key}/{model_name}_prediction",
         project_root=project_root,
@@ -152,6 +159,7 @@ def resolve_runtime_config(
         runs_dir=runs_dir,
         model_name=model_name,
         project_root=project_root,
+        family=family,
     )
     resolved_val_split = _resolve_split_name(variant, val_cfg.get("split", "test"))
     resolved_predict_source = _resolve_predict_source(
@@ -185,6 +193,7 @@ def resolve_runtime_config(
             **predict_cfg,
             "resolved_iou": _resolve_iou(predict_cfg, dataset_key),
             "resolved_source": resolved_predict_source,
+            "resolved_source_name": source if source in {"train", "val", "test"} else None,
         },
         "dataset": {
             "key": dataset_key,
@@ -195,6 +204,7 @@ def resolve_runtime_config(
             "val_dir": val_dir,
             "test_dir": test_dir,
             "data_yaml": data_yaml,
+            "rfdetr_dir": rfdetr_dir,
             "cache": dataset_override.get("cache"),
             "class_names": dict(variant.get("class_names", {})),
         },
@@ -216,19 +226,21 @@ def resolve_runtime_config(
     return runtime
 
 
-def _resolve_config_path(ref: str, base_dir: str) -> Path:
+def _resolve_config_path(ref: str, base_dir: str | list[str]) -> Path:
     """설정 이름 또는 파일 경로를 받아 실제 설정 파일을 찾는다."""
     project_root = get_project_root()
     ref_path = Path(ref)
+    base_dirs = [base_dir] if isinstance(base_dir, str) else list(base_dir)
 
     if ref_path.suffix in {".yaml", ".yml"} or "/" in ref or ref.startswith("."):
         candidate = resolve_path(ref_path, project_root)
         if candidate is not None and candidate.exists():
             return candidate
 
-    candidate = project_root / base_dir / f"{ref}.yaml"
-    if candidate.exists():
-        return candidate.resolve()
+    for base in base_dirs:
+        candidate = project_root / base / f"{ref}.yaml"
+        if candidate.exists():
+            return candidate.resolve()
 
     raise FileNotFoundError(f"Could not resolve config: {ref}")
 
@@ -263,6 +275,23 @@ def _resolve_first_existing_like(*values: str | Path | None, project_root: Path)
     return last_resolved
 
 
+def _resolve_preferred_path(
+    preferred: str | Path | None,
+    fallback: str | Path,
+    *,
+    project_root: Path,
+) -> Path:
+    """출력 디렉터리처럼 아직 존재하지 않아도 override를 우선해야 하는 경로를 해석한다."""
+    if preferred:
+        resolved = resolve_path(preferred, project_root)
+        if resolved is not None:
+            return resolved
+    resolved_fallback = resolve_path(fallback, project_root)
+    if resolved_fallback is None:
+        raise ValueError("Fallback output path could not be resolved")
+    return resolved_fallback
+
+
 def _resolve_split_name(variant: dict, preferred: str) -> str:
     """원하는 split이 없을 때 사용할 대체 split 이름을 결정한다."""
     aliases = [preferred]
@@ -280,6 +309,13 @@ def _resolve_split_name(variant: dict, preferred: str) -> str:
     raise ValueError("Dataset variant does not define train/val/test splits")
 
 
+def output_name_for_rfdetr(dataset_key: str, class_mode: str) -> str:
+    """dataset config key와 class_mode로 RF-DETR export 디렉터리 이름을 만든다."""
+    if dataset_key in {"big", "little"}:
+        return f"laboro_{dataset_key}_{class_mode}"
+    return f"{dataset_key}_{class_mode}"
+
+
 def _resolve_runtime_weights(
     *,
     stage: str,
@@ -288,16 +324,17 @@ def _resolve_runtime_weights(
     runs_dir: Path,
     model_name: str,
     project_root: Path,
+    family: str | None = None,
 ) -> str | None:
     """stage에 맞는 weight 우선순위를 정해 실제 모델 로드 대상을 고른다."""
     if cli_weights is not None:
         return _resolve_weight_input(cli_weights, project_root)
 
     if stage in {"validate", "predict"}:
-        trained_weight = _find_trained_weight(runs_dir)
+        trained_weight = _find_trained_weight(runs_dir, family=family)
         if trained_weight is not None:
             return str(trained_weight)
-        trained_weight = _find_shared_trained_weight(project_root, model_name)
+        trained_weight = _find_shared_trained_weight(project_root, model_name, family=family)
         if trained_weight is not None:
             return str(trained_weight)
 
@@ -320,18 +357,53 @@ def _resolve_weight_input(value: str | Path, project_root: Path) -> str:
     return str(value)
 
 
-def _find_trained_weight(runs_dir: Path) -> Path | None:
+def _find_trained_weight(runs_dir: Path, *, family: str | None = None) -> Path | None:
     """학습 산출물에서 재사용할 checkpoint를 우선순위대로 찾는다."""
+    if family == "rf_detr":
+        for candidate in (
+            runs_dir / "checkpoint_best_ema.pth",
+            runs_dir / "checkpoint_best_regular.pth",
+            runs_dir / "checkpoint.pth",
+        ):
+            if candidate.exists():
+                return candidate.resolve()
+        return None
+
     for candidate in (runs_dir / "weights" / "best.pt", runs_dir / "weights" / "last.pt"):
         if candidate.exists():
             return candidate.resolve()
     return None
 
 
-def _find_shared_trained_weight(project_root: Path, model_name: str) -> Path | None:
+def _find_shared_trained_weight(
+    project_root: Path,
+    model_name: str,
+    *,
+    family: str | None = None,
+) -> Path | None:
     """현재 dataset용 checkpoint가 없을 때 동일 모델의 공용 checkpoint를 찾는다."""
     runs_root = project_root / "runs"
     if not runs_root.is_dir():
+        return None
+
+    if family == "rf_detr":
+        best_candidates = sorted(runs_root.glob(f"*/{model_name}/checkpoint_best_ema.pth"))
+        if len(best_candidates) == 1:
+            return best_candidates[0].resolve()
+        if len(best_candidates) > 1:
+            raise ValueError(
+                f"Multiple RF-DETR checkpoints found for model '{model_name}': "
+                f"{[str(path) for path in best_candidates]}. Pass --weights explicitly."
+            )
+
+        fallback_candidates = sorted(runs_root.glob(f"*/{model_name}/checkpoint.pth"))
+        if len(fallback_candidates) == 1:
+            return fallback_candidates[0].resolve()
+        if len(fallback_candidates) > 1:
+            raise ValueError(
+                f"Multiple RF-DETR fallback checkpoints found for model '{model_name}': "
+                f"{[str(path) for path in fallback_candidates]}. Pass --weights explicitly."
+            )
         return None
 
     best_candidates = sorted(runs_root.glob(f"*/{model_name}/weights/best.pt"))
@@ -403,12 +475,22 @@ def _resolve_iou(stage_cfg: dict, dataset_key: str) -> float | None:
 
 def _validate_runtime(runtime: dict) -> None:
     """실행 전에 반드시 존재해야 하는 파일/디렉터리를 확인한다."""
-    data_yaml = runtime["dataset"]["data_yaml"]
-    if data_yaml is None or not data_yaml.exists():
-        raise FileNotFoundError(f"data.yaml not found: {data_yaml}")
+    family = runtime.get("family")
+    if family == "rf_detr":
+        rfdetr_dir = runtime["dataset"]["rfdetr_dir"]
+        train_ann = rfdetr_dir / "train" / "_annotations.coco.json"
+        valid_ann = rfdetr_dir / "valid" / "_annotations.coco.json"
+        if not train_ann.is_file():
+            raise FileNotFoundError(f"RF-DETR train annotations not found: {train_ann}")
+        if not valid_ann.is_file():
+            raise FileNotFoundError(f"RF-DETR valid annotations not found: {valid_ann}")
+    else:
+        data_yaml = runtime["dataset"]["data_yaml"]
+        if data_yaml is None or not data_yaml.exists():
+            raise FileNotFoundError(f"data.yaml not found: {data_yaml}")
 
     stage = runtime["stage"]
-    if stage == "predict":
+    if stage == "predict" and family != "rf_detr":
         source = runtime["predict"]["resolved_source"]
         if not source.exists():
             raise FileNotFoundError(f"predict source not found: {source}")

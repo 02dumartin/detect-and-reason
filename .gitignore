@@ -8,6 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+
 # Egg info
 *.egg-info/
 *.egg
@@ -20,14 +21,12 @@ data/
 # Runs
 runs/
 
-# Result
-result/
-
 # weights
 
 # Jupyter notebook checkpoints
 .ipynb_checkpoints/
 *.ipynb_checkpoints
+notebook/results/
 
 # Logs
 *.log
@@ -36,3 +35,17 @@ logs/
 # Temporary files
 tmp/*.pt
 *.pt
+
+# weights
+weights/
+*.pt
+*.pth
+
+
+# reuslt and static files
+result/
+benchmark/
+.xlsx
+tmp/
+.sh
+src/dino_vendor/

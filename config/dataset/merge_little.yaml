@@ -1,0 +1,22 @@
+name: laboro_tomatod_merge
+
+variants:
+  3cls:
+    path: /data/yolo/merge_3cls
+    train: /data/yolo/merge_3cls/train
+    val: /data/yolo/merge_3cls/val
+    test: /data/yolo/laboro_little_3cls/test
+    data_yaml: /data/yolo/merge_3cls/data.yaml
+    class_names:
+      0: fully ripened tomato
+      1: half ripened tomato
+      2: green tomato
+
+  1cls:
+    path: /data/yolo/merge_1cls
+    train: /data/yolo/merge_1cls/train
+    val: /data/yolo/merge_1cls/val
+    test: /data/yolo/laboro_little_1cls/test
+    data_yaml: /data/yolo/merge_1cls/data.yaml
+    class_names:
+      0: tomato

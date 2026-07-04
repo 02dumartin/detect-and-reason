@@ -5,7 +5,7 @@ class_mode: 1cls
 mode: detection_reasoning
 
 model:
-  init_weight: yolov8s-worldv2.pt
+  init_weight: weights/yolov8l-worldv2.pt
 
 class_names:
   0: tomato
@@ -49,10 +49,10 @@ val:
     default: 0.7
 
 predict:
-  save: true
+  save: false
   save_txt: true
   save_conf: true
-  conf: null
+  conf: 0.25
   agnostic_nms: false
   iou_default:
     little: 0.5
@@ -100,8 +100,6 @@ dataset_overrides:
     data_yaml: data/yolo/merge_1cls/data.yaml
     test_image_source: data/yolo/merge_1cls/test/images
     runs_dir: runs/merge/yolo_world_1cls
-    eval_dir: result/detection_reasoning/merge/yolo_world_1cls_eval
-    prediction_dir: result/detection_reasoning/merge/yolo_world_1cls_prediction
     qwen_dir: result/detection_reasoning/merge/yolo_world_1cls_qwen
 
 notes:

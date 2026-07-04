@@ -1,0 +1,23 @@
+name: custom_tomato
+
+variants:
+  2cls:
+    path: /data/yolo/custom_tomato_2cls
+    train: /data/yolo/custom_tomato_2cls/train
+    val: /data/yolo/custom_tomato_2cls/val
+    test: /data/yolo/custom_tomato_2cls/test
+    data_yaml: /data/yolo/custom_tomato_2cls/data.yaml
+    rfdetr_dir: /data/coco/custom_tomato_2cls
+    class_names:
+      0: ripe
+      1: unripe
+
+  1cls:
+    path: /data/yolo/custom_tomato_1cls
+    train: /data/yolo/custom_tomato_1cls/train
+    val: /data/yolo/custom_tomato_1cls/val
+    test: /data/yolo/custom_tomato_1cls/test
+    data_yaml: /data/yolo/custom_tomato_1cls/data.yaml
+    rfdetr_dir: /data/coco/custom_tomato_1cls
+    class_names:
+      0: tomato

@@ -1,0 +1,178 @@
+name: dino_3cls
+family: dino
+framework: detrex_lite        # working_title 기반 self-contained DINO (detectron2 비의존)
+class_mode: 3cls
+mode: detection_only
+
+# ---------------------------------------------------------------------------
+# 아키텍처 (working_title configs/dino/dino_resnet18.yaml 기반, 백본만 R50으로 상향)
+#   num_classes 는 class_mode(=클래스 수)에 맞춰 여기서 직접 지정한다.
+# ---------------------------------------------------------------------------
+model:
+  name: dino
+  detector: dino
+  init_weight: weights/dino_r50_4scale_coco.pth   # COCO 사전학습 DINO-R50 (transformer/neck/bbox 부분 로드)
+  num_classes: 3
+  num_queries: 300
+  embed_dim: 256
+  dn_number: 50
+  label_noise_ratio: 0.5
+  box_noise_scale: 1.0
+  aux_loss: true
+  select_box_nums_for_evaluation: 300
+  input_format: RGB
+  pixel_mean: [123.675, 116.280, 103.530]
+  pixel_std: [58.395, 57.120, 57.375]
+
+  backbone:
+    type: torchvision_resnet
+    name: resnet50
+    pretrained: true
+    frozen_norm: true
+    freeze_at: 1
+    out_features: [res3, res4, res5]
+
+  neck:
+    type: channel_mapper
+    in_features: [res3, res4, res5]
+    out_channels: 256
+    num_outs: 4
+    kernel_size: 1
+    use_group_norm: true
+
+  position_embedding:
+    num_pos_feats: 128
+    temperature: 10000
+    normalize: true
+    offset: -0.5
+
+  transformer:
+    num_feature_levels: 4
+    encoder:
+      embed_dim: 256
+      num_heads: 8
+      feedforward_dim: 2048
+      attn_dropout: 0.0
+      ffn_dropout: 0.0
+      num_layers: 6
+      post_norm: false
+      num_feature_levels: 4
+      use_checkpoint: false
+    decoder:
+      embed_dim: 256
+      num_heads: 8
+      feedforward_dim: 2048
+      attn_dropout: 0.0
+      ffn_dropout: 0.0
+      num_layers: 6
+      return_intermediate: true
+      num_feature_levels: 4
+      use_checkpoint: false
+
+  criterion:
+    loss_class_type: focal_loss
+    alpha: 0.25
+    gamma: 2.0
+    two_stage_binary_cls: false
+    matcher:
+      cost_class: 2.0
+      cost_bbox: 5.0
+      cost_giou: 2.0
+      cost_class_type: focal_loss_cost
+      alpha: 0.25
+      gamma: 2.0
+    weight_dict:
+      loss_class: 1.0
+      loss_bbox: 5.0
+      loss_giou: 2.0
+      loss_class_dn: 1.0
+      loss_bbox_dn: 5.0
+      loss_giou_dn: 2.0
+
+class_names:
+  0: fully ripened tomato
+  1: half ripened tomato
+  2: green tomato
+
+# ---------------------------------------------------------------------------
+# 학습 (working_title engine.Trainer 스키마)
+#   유효 배치 = batch_size x gradient_accumulation_steps = 4 x 3 = 12
+#   (yolo/rt_detr/rf_detr 과 동일하게 맞춤)
+# ---------------------------------------------------------------------------
+train:
+  device: cuda
+  batch_size: 4
+  total_batch_size: 12
+  gradient_accumulation_steps: 3
+  max_epochs: 150
+  eval_period_epochs: 10
+  log_period: 20
+  num_workers: 4
+  amp:
+    enabled: false
+  ema:
+    enabled: false
+    decay: 0.999
+  early_stopping:
+    enabled: true
+    metric: bbox/AP
+    mode: max
+    patience: 10
+  clip_grad:
+    enabled: true
+    max_norm: 0.1
+    norm_type: 2
+  optimizer:
+    name: AdamW
+    lr: 0.0001
+    betas: [0.9, 0.999]
+    weight_decay: 0.0005
+    lr_factor_rules:
+      - contains: [backbone, reference_points, sampling_offsets]
+        factor: 0.05
+  scheduler:
+    name: warmup_multistep
+    values: [1.0, 0.1]
+    milestones_epochs: [120, 140]
+    warmup:
+      epochs: 1
+      method: linear
+      factor: 0.001
+
+# 학습 시 입력 증강 / 전처리 (data.build 가 사용)
+data:
+  image_format: RGB
+  num_workers: 4
+  pin_memory: true
+  imgsz: 640                     # 타 모델(yolo/rt_detr/rf_detr)과 동일한 해상도로 맞춤
+  train_augmentation:
+    - type: RandomFlip
+    - type: ResizeShortestEdge
+      short_edge_length: [640]
+      max_size: 640
+      sample_style: choice
+  val_augmentation:
+    - type: ResizeShortestEdge
+      short_edge_length: 640
+      max_size: 640
+
+val:
+  split: test
+  conf_threshold: 0.01
+  score_threshold_prf1: 0.5
+  iou_threshold_prf1: 0.5
+
+predict:
+  conf: 0.25
+  splits:
+    - test
+  save_visualizations: false
+
+metrics:
+  - mAP50
+  - mAP50_95
+
+notes:
+  - DINO (DETR 계열) self-contained 이식 (working_title 기반, detectron2 비의존)
+  - COCO 레이아웃(data/coco/) 재사용; 데이터 경로는 rfdetr_dir 에서 split 별로 유도
+  - MSDeformAttn 은 CUDA 확장 미빌드 시 순수 PyTorch fallback

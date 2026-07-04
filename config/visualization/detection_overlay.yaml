@@ -2,12 +2,13 @@
 # tomato-detection-agentic 쪽의 기본 색 체계와 굵기 규칙을 그대로 맞춰 두었다.
 overlay:
   font_path: /usr/share/fonts/truetype/noto/NotoSans-Regular.ttf
-  font_size: 32
-  box_thickness: 4
+  font_size: 16
+  box_thickness: 3
+  # 이거 수정 필요! - resize된 이미지에 맞게 
 
   # false면 "클래스명 + confidence"를 같이 그린다.
   # true면 클래스명만 그린다.
-  label_only: false
+  label_only: true
 
   # 스마트폰 사진처럼 EXIF 회전 정보가 들어간 이미지에서도 bbox가 어긋나지 않게 한다.
   honor_exif: true

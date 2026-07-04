@@ -1,0 +1,48 @@
+name: owl_vit_2cls_zs
+family: owl_vit_zs
+framework: transformers
+class_mode: 2cls
+mode: detection_only
+
+model:
+  init_weight: google/owlv2-large-patch14-ensemble
+  hf_model: google/owlv2-large-patch14-ensemble
+
+class_names:
+  0: ripe
+  1: unripe
+
+prompts:
+  - red tomato
+  - green tomato
+
+train:
+  device: cuda
+  imgsz: 640
+  workers: 4
+
+predict:
+  save: false
+  save_txt: true
+  save_conf: true
+  conf: 0.25
+  agnostic_nms: false
+  iou_default:
+    default: 0.5
+
+dataset_overrides:
+  custom_tomato:
+    data_yaml: data/yolo/custom_tomato_2cls/data.yaml
+    rfdetr_dir: data/coco/custom_tomato_2cls
+    test_image_source: data/custom_tomato_dataset/custom_tomato_data_yolo/images/test
+    prediction_dir: result/detection_reasoning/custom_tomato/owl_vit_2cls_zs_prediction
+    eval_dir: result/detection_reasoning/custom_tomato/owl_vit_2cls_zs_eval
+  rob2pheno:
+    data_yaml: data/yolo/Rob2Pheno_2cls/data.yaml
+    rfdetr_dir: data/coco/Rob2Pheno_2cls
+    prediction_dir: result/detection_reasoning/rob2pheno/owl_vit_2cls_zs_prediction
+    eval_dir: result/detection_reasoning/rob2pheno/owl_vit_2cls_zs_eval
+
+notes:
+  - OWL-ViT zero-shot prompt order matches class_names order
+  - Evaluation should use the current detect-and-reason YOLO metric pipeline

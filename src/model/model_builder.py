@@ -17,5 +17,9 @@ def build_model(runtime_cfg: dict):
         return build_rt_detr_model(runtime_cfg)
     if family == "rf_detr":
         return build_rf_detr_model(runtime_cfg)
+    if family == "dino":
+        from src.model.dino import build_dino_model
+
+        return build_dino_model(runtime_cfg)
 
     raise ValueError(f"Unsupported model family: {family}")

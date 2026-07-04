@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 import torch
 
+from .coco_label_io import (
+    class_name_map_from_categories,
+    load_coco_gt,
+    load_coco_predictions,
+)
 from .model_complexity import estimate_ultralytics_model_complexity
 from .yolo_label_io import (
     build_image_index,
@@ -13,6 +19,24 @@ from .yolo_label_io import (
     normalize_class_name_map,
     yolo_row_to_detection,
 )
+
+
+@dataclass
+class DetectionSample:
+    """이미지 한 장의 GT/예측을 포맷 독립적으로 담는 구조체.
+
+    boxes는 모두 픽셀 `xyxy` 좌표다. YOLO txt든 COCO json이든 이 형태로
+    변환한 뒤 동일한 평가 코어에 넣으면, 입력 포맷과 무관하게 같은 metric이
+    나온다.
+    """
+
+    stem: str
+    file_name: str
+    gt_labels: list[int] = field(default_factory=list)
+    gt_boxes: list[list[float]] = field(default_factory=list)
+    pred_labels: list[int] = field(default_factory=list)
+    pred_boxes: list[list[float]] = field(default_factory=list)
+    pred_scores: list[float] = field(default_factory=list)
 
 
 def evaluate_yolo_label_predictions(
@@ -27,19 +51,90 @@ def evaluate_yolo_label_predictions(
 ) -> dict[str, Any]:
     """YOLO txt 예측 결과를 GT와 비교해 검출 성능을 평가한다.
 
-    이 함수는 `detect-and-reason` 쪽의 현재 워크플로우에 맞춰, 이미지와
-    라벨 txt만 있으면 바로 평가할 수 있도록 구성했다. 동시에 결과 포맷은
-    `tomato-detection-agentic`에서 저장하던 항목들과 최대한 비슷하게 맞춘다.
+    이미지/라벨 txt를 `DetectionSample`로 변환한 뒤, 포맷 독립 평가 코어
+    (`evaluate_detection_samples`)에 위임한다. COCO 경로와 동일한 코어를
+    쓰므로 두 포맷의 metric이 같은 기준으로 산출된다.
     """
     image_index = build_image_index(gt_images_dir)
     gt_labels_dir = Path(gt_labels_dir).resolve()
     pred_labels_dir = Path(pred_labels_dir).resolve()
+
+    sources = {
+        "gt_images_dir": str(Path(gt_images_dir).resolve()),
+        "gt_labels_dir": str(gt_labels_dir),
+        "pred_labels_dir": str(pred_labels_dir),
+    }
+    samples = _yolo_samples(image_index, gt_labels_dir, pred_labels_dir)
+    return evaluate_detection_samples(
+        samples=samples,
+        class_names=class_names,
+        iou_threshold=iou_threshold,
+        weight_reference=weight_reference,
+        model_imgsz=model_imgsz,
+        sources=sources,
+    )
+
+
+def evaluate_coco_predictions(
+    *,
+    gt_ann_path: str | Path,
+    pred_coco_path: str | Path,
+    class_names: dict[int, str] | list[str] | None = None,
+    iou_threshold: float = 0.5,
+    conf_threshold: float = 0.0,
+    weight_reference: str | Path | None = None,
+    model_imgsz: int = 640,
+) -> dict[str, Any]:
+    """COCO GT + COCO 예측 json을 YOLO 경로와 동일한 코어로 평가한다.
+
+    `class_names`를 주지 않으면 GT 어노테이션의 categories에서 추론한다.
+    `conf_threshold`로 예측을 한 번 더 거를 수 있다(기본 0.0). YOLO와 공정
+    비교를 위해서는 두 모델의 예측이 같은 conf로 필터된 상태여야 한다.
+    """
+    gt_by_image, categories = load_coco_gt(gt_ann_path)
+    pred_by_image = load_coco_predictions(pred_coco_path, conf_threshold=conf_threshold)
+
+    if class_names is None:
+        class_names = class_name_map_from_categories(categories)
+
+    sources = {
+        "gt_ann_path": str(Path(gt_ann_path).resolve()),
+        "pred_coco_path": str(Path(pred_coco_path).resolve()),
+    }
+    samples = _coco_samples(gt_by_image, pred_by_image)
+    return evaluate_detection_samples(
+        samples=samples,
+        class_names=class_names,
+        iou_threshold=iou_threshold,
+        weight_reference=weight_reference,
+        model_imgsz=model_imgsz,
+        sources=sources,
+    )
+
+
+def evaluate_detection_samples(
+    *,
+    samples: Iterable[DetectionSample],
+    class_names: dict[int, str] | list[str],
+    iou_threshold: float = 0.5,
+    weight_reference: str | Path | None = None,
+    model_imgsz: int = 640,
+    sources: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """포맷 독립 평가 코어. `DetectionSample` 스트림을 받아 metric을 낸다.
+
+    mAP(torchmetrics)와 acc 계열(IoU greedy 매칭)을 모두 여기서 계산하므로,
+    YOLO txt / COCO json 어느 입력이든 동일한 기준으로 비교된다.
+    """
+    sources = dict(sources or {})
     class_name_map = normalize_class_name_map(class_names)
 
     map_metric = _build_map_metric(class_metrics=True)
     class_agnostic_metric = _build_map_metric(class_metrics=False)
+    per_class_ap_metrics = {class_id: _build_map_metric(class_metrics=False) for class_id in class_name_map}
     per_image_rows: list[dict[str, Any]] = []
 
+    num_images = 0
     total_gt = 0
     total_pred = 0
     matched_gt = 0
@@ -52,17 +147,27 @@ def evaluate_yolo_label_predictions(
     per_class_fn = defaultdict(int)
     confusion = defaultdict(lambda: defaultdict(int))
 
-    for stem, image_info in image_index.items():
-        gt_rows = load_yolo_label_rows(gt_labels_dir / f"{stem}.txt")
-        pred_rows = load_yolo_label_rows(pred_labels_dir / f"{stem}.txt")
-
-        gt_labels, gt_boxes, _ = _rows_to_arrays(gt_rows, image_info.width, image_info.height)
-        pred_labels, pred_boxes, pred_scores = _rows_to_arrays(pred_rows, image_info.width, image_info.height)
+    for sample in samples:
+        num_images += 1
+        gt_labels, gt_boxes = sample.gt_labels, sample.gt_boxes
+        pred_labels, pred_boxes, pred_scores = sample.pred_labels, sample.pred_boxes, sample.pred_scores
 
         predictions = _as_torch_predictions(pred_boxes, pred_scores, pred_labels)
         targets = _as_torch_targets(gt_boxes, gt_labels)
         map_metric.update([predictions], [targets])
         class_agnostic_metric.update([_as_class_agnostic_predictions(predictions)], [_as_class_agnostic_targets(targets)])
+        for class_id, class_metric in per_class_ap_metrics.items():
+            class_gt_boxes, _ = _filter_detections_by_class(gt_labels, gt_boxes, None, class_id)
+            class_pred_boxes, class_pred_scores = _filter_detections_by_class(
+                pred_labels,
+                pred_boxes,
+                pred_scores,
+                class_id,
+            )
+            class_metric.update(
+                [_as_class_agnostic_predictions(_as_torch_predictions(class_pred_boxes, class_pred_scores, [0] * len(class_pred_boxes)))],
+                [_as_class_agnostic_targets(_as_torch_targets(class_gt_boxes, [0] * len(class_gt_boxes)))],
+            )
 
         gt_count = len(gt_labels)
         pred_count = len(pred_labels)
@@ -76,6 +181,7 @@ def evaluate_yolo_label_predictions(
 
         matches, unmatched_gt, unmatched_pred = _match_boxes(gt_boxes, pred_boxes, iou_threshold)
         matched_gt += len(matches)
+        correct_match_count = 0
 
         for gt_idx, pred_idx, _ in matches:
             gt_label = int(gt_labels[gt_idx])
@@ -84,6 +190,7 @@ def evaluate_yolo_label_predictions(
 
             if gt_label == pred_label:
                 correct_class_matches += 1
+                correct_match_count += 1
                 per_class_tp[gt_label] += 1
             else:
                 # IoU는 충분하지만 클래스가 틀린 경우이므로,
@@ -96,21 +203,30 @@ def evaluate_yolo_label_predictions(
         for pred_idx in unmatched_pred:
             per_class_fp[int(pred_labels[pred_idx])] += 1
 
+        image_precision_acc = correct_match_count / pred_count if pred_count else 0.0
+        image_classification_acc = correct_match_count / len(matches) if matches else 0.0
+        image_overall_acc = correct_match_count / gt_count if gt_count else 0.0
+
         per_image_rows.append(
             {
-                "stem": stem,
-                "file_name": image_info.file_name,
+                "stem": sample.stem,
+                "file_name": sample.file_name,
                 "num_gt": gt_count,
                 "num_predictions": pred_count,
                 "matched_detections": len(matches),
-                "correct_class_matches": sum(
-                    1 for gt_idx, pred_idx, _ in matches if int(gt_labels[gt_idx]) == int(pred_labels[pred_idx])
-                ),
+                "correct_class_matches": correct_match_count,
+                "precision_acc_pct": image_precision_acc * 100.0,
+                "classification_acc_pct": image_classification_acc * 100.0,
+                "overall_acc_pct": image_overall_acc * 100.0,
             }
         )
 
     map_results = _convert_metric_output(map_metric.compute(), class_name_map)
     ca_map_results = _convert_ca_metric_output(class_agnostic_metric.compute())
+    per_class_ap_results = {
+        class_id: _convert_ca_metric_output(class_metric.compute())
+        for class_id, class_metric in per_class_ap_metrics.items()
+    }
     model_complexity = estimate_ultralytics_model_complexity(weight_reference, imgsz=model_imgsz)
 
     overall_precision = correct_class_matches / total_pred if total_pred else 0.0
@@ -132,6 +248,8 @@ def evaluate_yolo_label_predictions(
         "class_precision": [],
         "class_recall": [],
         "class_f1": [],
+        "class_ap_50": [],
+        "class_ap_50_95": [],
     }
     for class_id, class_name in class_name_map.items():
         tp = per_class_tp[class_id]
@@ -141,6 +259,7 @@ def evaluate_yolo_label_predictions(
         class_recall = tp / (tp + fn) if (tp + fn) else 0.0
         class_f1 = _safe_f1(class_precision, class_recall)
         class_ap = map_results["per_class_map_by_id"].get(class_id)
+        class_ap_50 = per_class_ap_results.get(class_id, {}).get("ca_map_50")
 
         per_class_rows.append(
             {
@@ -154,6 +273,7 @@ def evaluate_yolo_label_predictions(
                 "precision": class_precision,
                 "recall": class_recall,
                 "f1": class_f1,
+                "ap_50": class_ap_50,
                 "ap_50_95": class_ap,
             }
         )
@@ -168,11 +288,14 @@ def evaluate_yolo_label_predictions(
         class_statistics["class_precision"].append(class_precision)
         class_statistics["class_recall"].append(class_recall)
         class_statistics["class_f1"].append(class_f1)
+        class_statistics["class_ap_50"].append(class_ap_50)
+        class_statistics["class_ap_50_95"].append(class_ap)
 
     detection_metrics = {
         **map_results["summary"],
         "classes": list(class_name_map.keys()),
         "map_per_class": map_results["map_per_class"],
+        "map_50_per_class": [per_class_ap_results.get(class_id, {}).get("ca_map_50") for class_id in class_name_map],
         "ca_map": ca_map_results.get("ca_map"),
         "ca_map_50": ca_map_results.get("ca_map_50"),
         "ca_map_75": ca_map_results.get("ca_map_75"),
@@ -180,7 +303,7 @@ def evaluate_yolo_label_predictions(
     }
 
     total_statistics = {
-        "num_images": len(image_index),
+        "num_images": num_images,
         "total_ground_truths": total_gt,
         "total_predictions": total_pred,
         "matched_detections": matched_gt,
@@ -196,9 +319,7 @@ def evaluate_yolo_label_predictions(
 
     return {
         "evaluation_info": {
-            "gt_images_dir": str(Path(gt_images_dir).resolve()),
-            "gt_labels_dir": str(gt_labels_dir),
-            "pred_labels_dir": str(pred_labels_dir),
+            **sources,
             "weight_reference": str(weight_reference) if weight_reference is not None else None,
             "model_imgsz": int(model_imgsz),
         },
@@ -211,14 +332,10 @@ def evaluate_yolo_label_predictions(
         "per_class": per_class_rows,
         "per_image": per_image_rows,
         "confusion": _materialize_confusion(confusion, class_name_map),
-        "paths": {
-            "gt_images_dir": str(Path(gt_images_dir).resolve()),
-            "gt_labels_dir": str(gt_labels_dir),
-            "pred_labels_dir": str(pred_labels_dir),
-        },
+        "paths": dict(sources),
         # 기존 스크립트 호환을 위해 이전 키도 함께 남긴다.
         "summary": {
-            "num_images": len(image_index),
+            "num_images": num_images,
             "total_ground_truths": total_gt,
             "total_predictions": total_pred,
             "matched_detections": matched_gt,
@@ -259,6 +376,49 @@ def _build_map_metric(*, class_metrics: bool):
     return MeanAveragePrecision(box_format="xyxy", iou_type="bbox", class_metrics=class_metrics)
 
 
+def _yolo_samples(image_index, gt_labels_dir: Path, pred_labels_dir: Path) -> Iterable[DetectionSample]:
+    """이미지 인덱스를 돌며 YOLO txt를 `DetectionSample`로 변환한다."""
+    for stem, image_info in image_index.items():
+        gt_rows = load_yolo_label_rows(gt_labels_dir / f"{stem}.txt")
+        pred_rows = load_yolo_label_rows(pred_labels_dir / f"{stem}.txt")
+
+        gt_labels, gt_boxes, _ = _rows_to_arrays(gt_rows, image_info.width, image_info.height)
+        pred_labels, pred_boxes, pred_scores = _rows_to_arrays(pred_rows, image_info.width, image_info.height)
+
+        yield DetectionSample(
+            stem=stem,
+            file_name=image_info.file_name,
+            gt_labels=gt_labels,
+            gt_boxes=gt_boxes,
+            pred_labels=pred_labels,
+            pred_boxes=pred_boxes,
+            pred_scores=pred_scores,
+        )
+
+
+def _coco_samples(
+    gt_by_image: dict[int, dict[str, Any]],
+    pred_by_image: dict[int, dict[str, list]],
+) -> Iterable[DetectionSample]:
+    """COCO GT/예측을 image_id 기준으로 묶어 `DetectionSample`로 변환한다.
+
+    GT 이미지 목록을 기준으로 순회하므로, 예측이 없는 이미지도 누락 없이
+    포함된다(detection_acc 분모가 정확해진다).
+    """
+    for image_id, gt in gt_by_image.items():
+        pred = pred_by_image.get(image_id, {})
+        file_name = gt["file_name"]
+        yield DetectionSample(
+            stem=Path(file_name).stem,
+            file_name=file_name,
+            gt_labels=gt["gt_labels"],
+            gt_boxes=gt["gt_boxes"],
+            pred_labels=pred.get("pred_labels", []),
+            pred_boxes=pred.get("pred_boxes", []),
+            pred_scores=pred.get("pred_scores", []),
+        )
+
+
 def _rows_to_arrays(
     rows: list[list[float]],
     width: int,
@@ -275,6 +435,26 @@ def _rows_to_arrays(
         boxes.append(box)
         scores.append(score)
     return labels, boxes, scores
+
+
+def _filter_detections_by_class(
+    labels: list[int],
+    boxes: list[list[float]],
+    scores: list[float] | None,
+    class_id: int,
+) -> tuple[list[list[float]], list[float]]:
+    """주어진 class_id에 해당하는 box/score만 추려낸다."""
+    filtered_boxes: list[list[float]] = []
+    filtered_scores: list[float] = []
+
+    for idx, label in enumerate(labels):
+        if int(label) != class_id:
+            continue
+        filtered_boxes.append(boxes[idx])
+        if scores is not None:
+            filtered_scores.append(scores[idx])
+
+    return filtered_boxes, filtered_scores
 
 
 def _as_torch_predictions(boxes: list[list[float]], scores: list[float], labels: list[int]) -> dict[str, torch.Tensor]:

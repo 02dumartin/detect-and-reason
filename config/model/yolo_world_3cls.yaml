@@ -5,7 +5,7 @@ class_mode: 3cls
 mode: detection_only
 
 model:
-  init_weight: yolov8s-worldv2.pt
+  init_weight: weights/yolov8l-worldv2.pt
 
 class_names:
   0: fully ripened tomato
@@ -53,14 +53,15 @@ val:
     default: 0.7
 
 predict:
-  save: true
+  save: false
   save_txt: true
   save_conf: true
-  conf: 0.45
+  conf: 0.25
   agnostic_nms: false
   iou_default:
     little: 0.5
     default: 0.7
+  # confidence 0.25 / IoU 0.7 default -> Little은 좀 더 작게 
 
 metrics:
   - mAP50
@@ -98,13 +99,10 @@ dataset_overrides:
     prediction_dir: result/detection_only/tomatod/yolo_world_3cls_prediction
 
   merge:
-    source_dataset: merge_3cls
-    cache: disk
-    data_yaml: data/yolo/merge_3cls/data.yaml
-    test_image_source: data/yolo/merge_3cls/test/images
-    runs_dir: runs/merge/yolo_world_3cls
-    eval_dir: result/detection_only/merge/yolo_world_3cls_eval
-    prediction_dir: result/detection_only/merge/yolo_world_3cls_prediction
+    tomatod:
+      source_dataset: merge_3cls
+      cache: disk
+      data_yaml: data/yolo/merge_3cls/data.yaml
 
 notes:
   - YOLO-World uses text prompts via model.set_classes(prompts)

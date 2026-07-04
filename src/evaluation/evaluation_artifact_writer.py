@@ -60,6 +60,12 @@ def _build_summary_rows(results: dict[str, Any]) -> list[dict[str, str]]:
         class_name = row.get("class_name", "unknown")
         rows.append(
             {
+                "Metric": f"{class_name}_AP@0.5",
+                "Value": _fmt(row.get("ap_50")),
+            }
+        )
+        rows.append(
+            {
                 "Metric": f"{class_name}_AP@0.5:0.95",
                 "Value": _fmt(row.get("ap_50_95")),
             }
@@ -74,6 +80,10 @@ def _build_summary_rows(results: dict[str, Any]) -> list[dict[str, str]]:
             {"Metric": "CA-mAP@0.75", "Value": _fmt(detection_metrics.get("ca_map_75"))},
             {"Metric": "Precision", "Value": _fmt(total_statistics.get("overall_precision"))},
             {"Metric": "Recall", "Value": _fmt(total_statistics.get("overall_recall"))},
+            {"Metric": "F1 Score", "Value": _fmt(total_statistics.get("overall_f1"))},
+            {"Metric": "Detection Acc", "Value": _fmt(total_statistics.get("detection_acc"))},
+            {"Metric": "Classification Acc", "Value": _fmt(total_statistics.get("classification_acc"))},
+            {"Metric": "Overall Acc", "Value": _fmt(total_statistics.get("overall_acc"))},
             {"Metric": "Parameter(M)", "Value": _fmt(model_complexity.get("params_m"), digits=2)},
             {"Metric": "GFLOPs", "Value": _fmt(model_complexity.get("gflops"), digits=2)},
         ]

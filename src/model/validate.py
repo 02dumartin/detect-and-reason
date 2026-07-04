@@ -1,9 +1,17 @@
 from __future__ import annotations
 
 from src.model.model_builder import build_model
+from src.model.rf_detr_runner import run_rf_detr_validate
 
 
 def run_validate(runtime_cfg: dict):
+    if runtime_cfg.get("family") == "rf_detr":
+        return run_rf_detr_validate(runtime_cfg)
+    if runtime_cfg.get("family") == "dino":
+        from src.model.dino_runner import run_dino_validate
+
+        return run_dino_validate(runtime_cfg)
+
     model = build_model(runtime_cfg)
 
     val_cfg = runtime_cfg.get("val", {})

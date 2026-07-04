@@ -1,0 +1,79 @@
+name: rt_detr_2cls
+family: rt_detr
+framework: ultralytics
+class_mode: 2cls
+mode: detection_only
+
+model:
+  init_weight: weights/rtdetr-l.pt
+
+class_names:
+  0: ripe
+  1: unripe
+
+train:
+  epochs: 150
+  imgsz: 640
+  batch: 12
+  workers: 8
+  run_name: rt_detr_2cls
+
+  augmentation:
+    mosaic: 0.2
+    close_mosaic: 10
+    mixup: 0.1
+    scale: 0.2
+    translate: 0.1
+    degrees: 10
+    fliplr: 0.5
+    hsv_h: 0.015
+    hsv_s: 0.2
+    hsv_v: 0.2
+
+  patience: 30
+  amp: true
+  optimizer: AdamW
+  lr0: 0.001
+  lrf: 0.01
+  cos_lr: true
+
+val:
+  split: test
+  plots: true
+  conf: 0.001
+  max_det: 300
+  iou_default:
+    default: 0.5
+
+predict:
+  save: false
+  save_txt: true
+  save_conf: true
+  conf: 0.25
+  max_det: 50
+  iou_default:
+    default: 0.55
+
+metrics:
+  - mAP50
+  - mAP50_95
+  - detection_acc
+  - classification_acc
+  - overall_acc
+
+dataset_overrides:
+  custom_tomato:
+    source_dataset: custom_tomato_2cls
+    cache: disk
+    data_yaml: data/yolo/custom_tomato_2cls/data.yaml
+    rfdetr_dir: data/coco/custom_tomato_2cls
+    test_image_source: data/custom_tomato_dataset/custom_tomato_data_yolo/images/test
+    runs_dir: runs/custom_tomato/rt_detr_2cls
+    eval_dir: result/detection_only/custom_tomato/rt_detr_2cls_eval
+    prediction_dir: result/detection_only/custom_tomato/rt_detr_2cls_prediction
+
+notes:
+  - val() passes conf=0.45, iou, and max_det explicitly
+  - predict() passes conf=0.45, iou, and max_det explicitly
+  - custom_tomato uses default iou=0.55
+  - if you retrain with rtdetr-x.pt later, change model.init_weight only

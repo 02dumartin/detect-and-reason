@@ -1,5 +1,5 @@
 """
-단일 모델 기준으로 train / validate / predict를 실행하는 진입 스크립트
+단일 모델 기준으로 train 실행하는 진입 스크립트
 
 Examples:
     python scripts/train_model.py --model yolo11_3cls --dataset big --stage train
@@ -47,6 +47,12 @@ def parse_args() -> argparse.Namespace:
         type=str,
         help="Predict source path or split name (train/val/test). Only used for predict stage.",
     )
+    parser.add_argument(
+        "--conf",
+        type=float,
+        help="Predict confidence threshold override (predict stage only). "
+        "예: mAP/best-F1 산출용 저conf 예측은 --conf 0.001.",
+    )
 
     return parser.parse_args()
 
@@ -66,6 +72,10 @@ def main() -> None:
         weights=args.weights,
         source=args.source,
     )
+
+    # predict conf override (mAP/best-F1 산출용 저conf 예측 등)
+    if args.stage == "predict" and args.conf is not None:
+        runtime_cfg.setdefault("predict", {})["conf"] = args.conf
 
     _print_runtime_summary(runtime_cfg)
 
@@ -91,6 +101,8 @@ def _print_runtime_summary(runtime_cfg: dict) -> None:
         f"[train_model] dataset={runtime_cfg['dataset']['key']} "
         f"data_yaml={runtime_cfg['dataset']['data_yaml']}"
     )
+    if runtime_cfg.get("family") == "rf_detr":
+        print(f"[train_model] rfdetr_dir={runtime_cfg['dataset']['rfdetr_dir']}")
 
     # stage마다 확인하고 싶은 출력 경로가 달라서 로그 항목도 구분
     if runtime_cfg["stage"] == "train":

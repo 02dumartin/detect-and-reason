@@ -1,0 +1,23 @@
+name: Rob2Pheno
+
+variants:
+  2cls:
+    path: /data/yolo/Rob2Pheno_2cls
+    train: /data/yolo/Rob2Pheno_2cls/train
+    val: /data/yolo/Rob2Pheno_2cls/val
+    test: /data/yolo/Rob2Pheno_2cls/test
+    data_yaml: /data/yolo/Rob2Pheno_2cls/data.yaml
+    rfdetr_dir: /data/coco/Rob2Pheno_2cls
+    class_names:
+      0: ripe
+      1: unripe
+
+  1cls:
+    path: /data/yolo/Rob2Pheno_1cls
+    train: /data/yolo/Rob2Pheno_1cls/train
+    val: /data/yolo/Rob2Pheno_1cls/val
+    test: /data/yolo/Rob2Pheno_1cls/test
+    data_yaml: /data/yolo/Rob2Pheno_1cls/data.yaml
+    rfdetr_dir: /data/coco/Rob2Pheno_1cls
+    class_names:
+      0: tomato

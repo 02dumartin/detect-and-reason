@@ -11,7 +11,7 @@ dependencies = [
   "matplotlib>=3.10.8",
   "ipykernel>=6.30.1",
   "jupyterlab>=4.4.7",
-  "ultralytics==8.3.243",
+  "ultralytics==8.4.16",
   "pytorch-lightning==2.4.0",
   "scikit-learn==1.5.2",
   "seaborn==0.13.2",
@@ -23,18 +23,24 @@ dependencies = [
   "opencv-python>=4.8.0",
   "supervision>=0.29.1",
   "autorootcwd>=1.0.1",
+  "rfdetr>=1.5.0",
+  "openpyxl>=3.1.5",
+  "pandas>=3.0.3",
+  "vllm>=0.19.1",
 ]
 
 [dependency-groups]
 vlm = [
-  "torch==2.7.1",
-  "torchvision==0.22.1",
+  "torch==2.10.0",
+  "torchvision==0.25.0",
   "qwen-vl-utils>=0.0.14",
   "accelerate>=1.0.0",
   "datasets>=3.0.0",
   "outlines>=0.1.0",
   "supervision>=0.25.0",
   "bitsandbytes>=0.49.1",
+  "openai>=1.0.0",
+  "vllm>=0.10.0",
 ]
 dev = [
   "pytest>=7.4.0",
@@ -44,13 +50,12 @@ dev = [
 
 [[tool.uv.index]]
 name = "pytorch-cu128"
-url = "https://download.pytorch.org/whl/cu128"
+url = "https://download.pytorch.org/whl/nightly/cu128"
 explicit = true
 
 [[tool.uv.index]]
 url = "https://pypi.org/simple/"
 default = true
 
-[tool.uv.sources]
-torch = { index = "pytorch-cu128" }
-torchvision = { index = "pytorch-cu128" }
+[tool.uv]
+environments = ["sys_platform == 'linux'"]

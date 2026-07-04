@@ -5,7 +5,7 @@ class_mode: 3cls
 mode: detection_only
 
 model:
-  init_weight: rtdetr-l.pt
+  init_weight: weights/rtdetr-l.pt
 
 class_names:
   0: fully ripened tomato
@@ -30,28 +30,28 @@ train:
     hsv_h: 0.015
     hsv_s: 0.2
     hsv_v: 0.2
-
-  patience: 10
+  
+  patience: 30
   amp: true
   optimizer: AdamW
-  lr0: 0.002
+  lr0: 0.001
   lrf: 0.01
   cos_lr: true
 
 val:
   split: test
   plots: true
-  conf: 0.45
-  max_det: 50
+  conf: 0.001
+  max_det: 300
   iou_default:
     little: 0.45
     default: 0.55
 
 predict:
-  save: true
+  save: false
   save_txt: true
   save_conf: true
-  conf: 0.45
+  conf: 0.25
   max_det: 50
   iou_default:
     little: 0.45
@@ -98,8 +98,6 @@ dataset_overrides:
     data_yaml: data/yolo/merge_3cls/data.yaml
     test_image_source: data/yolo/merge_3cls/test/images
     runs_dir: runs/merge/rt_detr_3cls
-    eval_dir: result/detection_only/merge/rt_detr_3cls_eval
-    prediction_dir: result/detection_only/merge/rt_detr_3cls_prediction
 
 notes:
   - val() passes conf=0.45, iou, and max_det explicitly

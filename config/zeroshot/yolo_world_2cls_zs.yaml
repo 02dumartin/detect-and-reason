@@ -1,0 +1,47 @@
+name: yolo_world_2cls_zs
+family: yolo_world
+framework: ultralytics
+class_mode: 2cls
+mode: detection_only
+
+model:
+  init_weight: weights/yolov8l-worldv2.pt
+
+class_names:
+  0: ripe
+  1: unripe
+
+prompts:
+  - red tomato
+  - green tomato
+
+train:
+  device: cuda
+  imgsz: 640
+  workers: 8
+
+predict:
+  save: false
+  save_txt: true
+  save_conf: true
+  conf: 0.05
+  agnostic_nms: false
+  iou_default:
+    default: 0.5
+
+dataset_overrides:
+  custom_tomato:
+    data_yaml: data/yolo/custom_tomato_2cls/data.yaml
+    rfdetr_dir: data/coco/custom_tomato_2cls
+    test_image_source: data/custom_tomato_dataset/custom_tomato_data_yolo/images/test
+    prediction_dir: result/detection_reasoning/custom_tomato/yolo_world_2cls_zs_prediction
+    eval_dir: result/detection_reasoning/custom_tomato/yolo_world_2cls_zs_eval
+  rob2pheno:
+    data_yaml: data/yolo/Rob2Pheno_2cls/data.yaml
+    rfdetr_dir: data/coco/Rob2Pheno_2cls
+    prediction_dir: result/detection_reasoning/rob2pheno/yolo_world_2cls_zs_prediction
+    eval_dir: result/detection_reasoning/rob2pheno/yolo_world_2cls_zs_eval
+
+notes:
+  - YOLO-World zero-shot prompts are set via model.set_classes(prompts)
+  - Evaluation should use the current detect-and-reason YOLO metric pipeline

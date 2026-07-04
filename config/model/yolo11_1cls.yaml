@@ -5,7 +5,7 @@ class_mode: 1cls
 mode: detection_reasoning
 
 model:
-  init_weight: yolo11l.pt
+  init_weight: weights/yolo11l.pt
 
 class_names:
   0: tomato
@@ -46,7 +46,7 @@ val:
     default: 0.7
 
 predict:
-  save: true
+  save: false
   save_txt: true
   save_conf: true
   conf: 0.25
@@ -55,7 +55,7 @@ predict:
     little: 0.5
     default: 0.7
 
-metrics:
+metrics:  
   - mAP50
   - mAP50_95
   - detection_acc
@@ -97,8 +97,6 @@ dataset_overrides:
     data_yaml: data/yolo/merge_1cls/data.yaml
     test_image_source: data/yolo/merge_1cls/test/images
     runs_dir: runs/merge/yolo11_1cls
-    eval_dir: result/detection_reasoning/merge/yolo11_1cls_eval
-    prediction_dir: result/detection_reasoning/merge/yolo11_1cls_prediction
     qwen_dir: result/detection_reasoning/merge/yolo11_1cls_qwen
 
 notes:

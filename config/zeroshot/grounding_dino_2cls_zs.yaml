@@ -1,0 +1,51 @@
+name: grounding_dino_2cls_zs
+family: grounding_dino_zs
+framework: grounding_dino
+class_mode: 2cls
+mode: detection_only
+
+model:
+  init_weight: weights/groundingdino_swint_ogc.pth
+
+  gdino_config: config/zeroshot/GroundingDINO_SwinT_OGC.py
+  text_threshold: 0.25
+
+class_names:
+  0: ripe
+  1: unripe
+
+prompts:
+  - ripe red tomato fruit growing in a greenhouse truss, clustered vine tomato, mature red fruit
+  - unripe green tomato fruit growing in a greenhouse truss, clustered vine tomato, immature green fruit
+
+train:
+  device: cuda
+  imgsz: 640
+  workers: 4
+
+predict:
+  save: false
+  save_txt: true
+  save_conf: true
+  conf: 0.1
+  agnostic_nms: false
+  iou_default:
+    default: 0.5
+
+dataset_overrides:
+  custom_tomato:
+    data_yaml: data/yolo/custom_tomato_2cls/data.yaml
+    rfdetr_dir: data/coco/custom_tomato_2cls
+    test_image_source: data/custom_tomato_dataset/custom_tomato_data_yolo/images/test
+    prediction_dir: result/detection_reasoning/custom_tomato/grounding_dino_2cls_zs_prediction
+    eval_dir: result/detection_reasoning/custom_tomato/grounding_dino_2cls_zs_eval
+
+  rob2pheno:
+    data_yaml: data/yolo/Rob2Pheno_2cls/data.yaml
+    rfdetr_dir: data/coco/Rob2Pheno_2cls
+    prediction_dir: result/detection_reasoning/rob2pheno/grounding_dino_2cls_zs_prediction
+    eval_dir: result/detection_reasoning/rob2pheno/grounding_dino_2cls_zs_eval
+
+notes:
+  - Grounding DINO config/weights can be overridden directly in this YAML
+  - Phrase mapping is normalized to ripe/unripe before saving YOLO txt predictions

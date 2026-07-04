@@ -39,6 +39,8 @@ def resolve_yolo_split_dirs(split_path: str | Path) -> tuple[Path, Path]:
     1. split 루트 자체: `.../test`
     2. 이미지 폴더 직접 지정: `.../test/images`
     3. 라벨 폴더 직접 지정: `.../test/labels`
+    4. 이미지 split 폴더 직접 지정: `.../images/test`
+    5. 라벨 split 폴더 직접 지정: `.../labels/test`
 
     호출하는 쪽이 어떤 형태를 넘기든, 여기서 실제 이미지/라벨 폴더 쌍으로
     바꿔 주면 이후 로직은 동일한 규칙만 믿고 동작할 수 있다.
@@ -50,6 +52,12 @@ def resolve_yolo_split_dirs(split_path: str | Path) -> tuple[Path, Path]:
         labels_dir = path.parent / "labels"
     elif path.name == "labels":
         images_dir = path.parent / "images"
+        labels_dir = path
+    elif path.parent.name == "images":
+        images_dir = path
+        labels_dir = path.parents[1] / "labels" / path.name
+    elif path.parent.name == "labels":
+        images_dir = path.parents[1] / "images" / path.name
         labels_dir = path
     else:
         images_dir = path / "images"
