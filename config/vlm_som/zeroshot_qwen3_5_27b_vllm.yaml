@@ -1,0 +1,41 @@
+# zeroshot_som.py --backend vllm --vlm-backend-config 이 파일용.
+# config/vlm/qwen3_5_27b_vllm_thinking.yaml(기존 per-box 파이프라인 설정)과 backend/generation
+# 스키마는 같지만, SoM은 이미지 1장당 최대 20마크를 한 번에 답해야 해서 native thinking을
+# 켜두면 마크별 자연어 추론에 토큰 예산을 다 쓰고 최종 JSON을 못 내는 문제가 있었다
+# (2026-09-11 확인). 그래서 thinking은 끄고, 대신 프롬프트의 JSON 스키마 안에 짧은
+# "reasoning" 필드를 둬서(som_common.py:SomPrompts.full_prompt) DaR의 다른 VLM
+# 파이프라인(src/vlm/prompting.py)과 같은 방식으로 분량을 제한한다.
+backend:
+  type: qwen_vllm
+  model_name: Qwen/Qwen3.5-27B
+  trust_remote_code: true
+  thinking: false
+  # ICL 켜면 exemplar마다 2장(SoM+모자이크) x n_exemplars + 질의 턴 2장이 한 대화에 다 들어간다
+  # (icl.n_exemplars=2 기준 2*2+2=6장). zero-shot(질의 턴만, 2장)에는 여유만 더 생기는
+  # 정도라 이 값 하나로 두 모드를 같이 커버한다 (2026-09-11: 4로 뒀다가 ICL에서
+  # "At most 4 image(s)" 에러로 확인).
+  max_images_per_prompt: 8
+  gpu_memory_utilization: 0.45
+  # continuous batching은 배치 구성에 따라 부동소수점 연산 순서가 달라져서 greedy
+  # (temperature=0)여도 실행마다 결과가 살짝 바뀔 수 있었다(2026-09-11 확인, little/
+  # tomatod/ag_rob_tomato 재실행 시 acc가 몇 % 흔들림). enforce_eager로 CUDA graph
+  # 캡처발 변동 요인은 없앤다. enable_chunked_prefill까지 끄면 이 모델(262144 컨텍스트)은
+  # KV 캐시 메모리 부족으로 아예 로딩이 실패해서(2026-09-11 확인) 그건 켜둔 채로 둔다 —
+  # 완전한 재현성이 필요하면 zeroshot_som.py 쪽 배치 크기를 1로 낮출 것.
+  enforce_eager: true
+
+generation:
+  max_new_tokens: 768 # reasoning(<=40 words) + 최대 20마크 JSON 답변 여유분
+  repetition_penalty: 1.1
+  do_sample: false
+  temperature: 0.2
+  top_p: 0.9
+  seed: 0
+
+proposal:
+  family: yolo11
+  conf: 0.1
+  max_boxes: 20
+
+icl:
+  n_exemplars: 2

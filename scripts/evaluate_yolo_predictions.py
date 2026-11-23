@@ -7,6 +7,7 @@ import autorootcwd
 
 from src.config_loader import resolve_runtime_config
 from src.evaluation import evaluate_yolo_label_predictions, save_detection_evaluation_artifacts
+from src.evaluation.llm_classify_artifact_writer import save_llm_classify_artifacts_from_detection_results
 from src.evaluation.yolo_label_io import resolve_prediction_labels_dir, resolve_yolo_split_dirs
 
 
@@ -79,6 +80,11 @@ def main() -> None:
     )
 
     artifact_paths = save_detection_evaluation_artifacts(results, output_dir)
+    # SoM 실험(zeroshot_som.py 등)의 evaluation/ 결과표(acc/macro_f1/n_pairs/...)와 같은
+    # 포맷으로 남겨서 두 파이프라인을 직접 비교할 수 있게 한다(2026-09-13 요청).
+    save_llm_classify_artifacts_from_detection_results(
+        results, output_dir / "llm_classify", dataset=runtime_cfg["dataset"]["key"], model=runtime_cfg["model_name"]
+    )
 
     stats = results["detailed_statistics"]["total_statistics"]
     metrics = results["detection_metrics"]

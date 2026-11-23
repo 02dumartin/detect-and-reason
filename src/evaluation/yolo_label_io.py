@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import sys
 
 from PIL import Image
+from PIL import UnidentifiedImageError
 
 
 # YOLO 라벨을 이미지와 매칭할 때 흔히 만나는 확장자를 모두 허용한다.
@@ -93,14 +95,22 @@ def build_image_index(images_dir: str | Path) -> dict[str, ImageInfo]:
     """
     images_dir = Path(images_dir)
     index: dict[str, ImageInfo] = {}
+    skipped_count = 0
+    skipped_samples: list[tuple[Path, str]] = []
 
     for path in sorted(images_dir.iterdir()):
         if not path.is_file() or path.suffix not in IMAGE_EXTENSIONS:
             continue
 
-        # YOLO 정규화 좌표를 실제 픽셀 좌표로 복원하려면 원본 크기가 필요하다.
-        with Image.open(path) as image:
-            width, height = image.size
+        try:
+            # YOLO 정규화 좌표를 실제 픽셀 좌표로 복원하려면 원본 크기가 필요하다.
+            with Image.open(path) as image:
+                width, height = image.size
+        except (UnidentifiedImageError, OSError, ValueError) as exc:
+            skipped_count += 1
+            if len(skipped_samples) < 5:
+                skipped_samples.append((path, str(exc)))
+            continue
 
         index[path.stem] = ImageInfo(
             stem=path.stem,
@@ -112,6 +122,14 @@ def build_image_index(images_dir: str | Path) -> dict[str, ImageInfo]:
 
     if not index:
         raise ValueError(f"no images found in {images_dir}")
+    if skipped_count:
+        sample = "; ".join(f"{path.name}: {reason}" for path, reason in skipped_samples)
+        extra = f" (showing first {len(skipped_samples)})" if skipped_count > len(skipped_samples) else ""
+        print(
+            f"[warn] skipped unreadable images in {images_dir}: {skipped_count}{extra}; {sample}",
+            file=sys.stderr,
+            flush=True,
+        )
     return index
 
 

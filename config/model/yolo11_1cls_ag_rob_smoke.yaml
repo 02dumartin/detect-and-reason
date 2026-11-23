@@ -1,0 +1,56 @@
+name: yolo11_1cls_ag_rob_smoke
+family: yolo11
+framework: ultralytics
+class_mode: 1cls
+mode: detection_reasoning
+model:
+  init_weight: weights/yolo11l.pt
+class_names:
+  0: tomato
+train:
+  epochs: 2
+  imgsz: 640
+  batch: 12
+  workers: 8
+  run_name: yolo11_1cls_ag_rob_smoke
+  augmentation:
+    mosaic: 0.2
+    close_mosaic: 10
+    mixup: 0.1
+    scale: 0.2
+    translate: 0.1
+    degrees: 10
+    fliplr: 0.5
+    hsv_h: 0.015
+    hsv_s: 0.2
+    hsv_v: 0.2
+  patience: 10
+  amp: true
+  optimizer: AdamW
+  lr0: 0.001
+  lrf: 0.01
+  cos_lr: true
+val:
+  split: test
+  plots: true
+  conf: null
+  agnostic_nms: true
+  iou_default:
+    little: 0.5
+    default: 0.7
+predict:
+  save: false
+  save_txt: true
+  save_conf: true
+  conf: 0.25
+  agnostic_nms: true
+  iou_default:
+    little: 0.5
+    default: 0.7
+metrics:
+- mAP50
+- mAP50_95
+- detection_acc
+notes:
+- ag_rob_tomato smoke test 전용 config (epochs=2). 본 학습은 yolo11_1cls.yaml(epochs 150)
+  사용.

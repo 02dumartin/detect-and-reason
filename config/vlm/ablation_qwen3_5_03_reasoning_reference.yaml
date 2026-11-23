@@ -1,0 +1,58 @@
+name: ablation_qwen3_5_03_reasoning_reference
+
+task:
+  target_class_mode: 3cls
+  class_map:
+    0: fully-ripe
+    1: semi-ripe
+    2: unripe
+
+backend:
+  type: qwen_vllm
+  model_name: Qwen/Qwen3.5-27B
+  trust_remote_code: true
+  thinking: false
+  max_images_per_prompt: 8
+  gpu_memory_utilization: 0.45
+  batch_size: 16
+
+generation:
+  max_new_tokens: 768
+  repetition_penalty: 1.1
+  do_sample: false
+  temperature: 0.2
+  top_p: 0.9
+  top_k: 40
+
+prompt:
+  use_examples: true
+  use_reasoning: true
+  use_color_guide: true
+  include_bbox_json: true
+  reasoning_max_words: 35
+  example_picker:
+    enabled: true
+    adjustment:
+      type: none
+    source_split: train
+    per_class: 2
+    max_total_examples: 6
+    resize: 224
+    min_brightness: 60
+    expand_ratio: 0.1
+    min_size: 32
+  color_signal:
+    mode: none
+
+crop:
+  expand_ratio: 0.1
+  min_size: 32
+  resize: 320
+  adjustment:
+    type: none
+
+output:
+  save_overlay: true
+  save_eval: true
+  save_family_export: true
+  overlay_config: config/visualization/detection_overlay.yaml

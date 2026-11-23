@@ -1,0 +1,41 @@
+name: rf_detr_1cls_ag_rob_smoke
+family: rf_detr
+framework: rfdetr
+class_mode: 1cls
+mode: detection_reasoning
+model:
+  model_size: large
+  init_weight: weights/rf-detr-large-2026.pth
+class_names:
+  0: tomato
+train:
+  epochs: 2
+  imgsz: 640
+  batch_size: 4
+  grad_accum_steps: 3
+  lr: 0.0001
+  lr_encoder: 0.00015
+  weight_decay: 0.0001
+  use_ema: true
+  ema_decay: 0.993
+  early_stopping: true
+  early_stopping_patience: 10
+  early_stopping_min_delta: 0.001
+  num_workers: 2
+  tensorboard: true
+val:
+  split: test
+  conf_threshold: 0.01
+  score_threshold_prf1: 0.5
+  iou_threshold_prf1: 0.5
+predict:
+  conf: 0.25
+  splits:
+  - test
+  save_visualizations: false
+metrics:
+- mAP50
+- mAP50_95
+notes:
+- ag_rob_tomato smoke test 전용 config (epochs=2). 본 학습은 rf_detr_1cls.yaml(epochs 150)
+  사용.

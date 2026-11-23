@@ -84,6 +84,8 @@ def _build_summary_rows(results: dict[str, Any]) -> list[dict[str, str]]:
             {"Metric": "Detection Acc", "Value": _fmt(total_statistics.get("detection_acc"))},
             {"Metric": "Classification Acc", "Value": _fmt(total_statistics.get("classification_acc"))},
             {"Metric": "Overall Acc", "Value": _fmt(total_statistics.get("overall_acc"))},
+            {"Metric": "llm-classify acc", "Value": _fmt(total_statistics.get("llm_classify_acc"))},
+            {"Metric": "llm-classify macro-F1", "Value": _fmt(total_statistics.get("llm_classify_macro_f1"))},
             {"Metric": "Parameter(M)", "Value": _fmt(model_complexity.get("params_m"), digits=2)},
             {"Metric": "GFLOPs", "Value": _fmt(model_complexity.get("gflops"), digits=2)},
         ]

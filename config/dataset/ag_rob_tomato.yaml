@@ -1,0 +1,24 @@
+name: ag_rob_tomato
+
+variants:
+  3cls:
+    path: /data/yolo/ag_rob_tomato_3cls
+    train: /data/yolo/ag_rob_tomato_3cls/train
+    val: /data/yolo/ag_rob_tomato_3cls/val
+    test: /data/yolo/ag_rob_tomato_3cls/test
+    data_yaml: /data/yolo/ag_rob_tomato_3cls/data.yaml
+    rfdetr_dir: /data/coco/ag_rob_tomato_3cls
+    class_names:
+      0: fully ripened tomato
+      1: half ripened tomato
+      2: green tomato
+
+  1cls:
+    path: /data/yolo/ag_rob_tomato_1cls
+    train: /data/yolo/ag_rob_tomato_1cls/train
+    val: /data/yolo/ag_rob_tomato_1cls/val
+    test: /data/yolo/ag_rob_tomato_1cls/test
+    data_yaml: /data/yolo/ag_rob_tomato_1cls/data.yaml
+    rfdetr_dir: /data/coco/ag_rob_tomato_1cls
+    class_names:
+      0: tomato

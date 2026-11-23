@@ -1,0 +1,174 @@
+name: dino_1cls_ag_rob_smoke
+family: dino
+framework: detrex_lite
+class_mode: 1cls
+mode: detection_only
+model:
+  name: dino
+  detector: dino
+  init_weight: weights/dino_r50_4scale_coco.pth
+  num_classes: 1
+  num_queries: 300
+  embed_dim: 256
+  dn_number: 50
+  label_noise_ratio: 0.5
+  box_noise_scale: 1.0
+  aux_loss: true
+  select_box_nums_for_evaluation: 300
+  input_format: RGB
+  pixel_mean:
+  - 123.675
+  - 116.28
+  - 103.53
+  pixel_std:
+  - 58.395
+  - 57.12
+  - 57.375
+  backbone:
+    type: torchvision_resnet
+    name: resnet50
+    pretrained: true
+    frozen_norm: true
+    freeze_at: 1
+    out_features:
+    - res3
+    - res4
+    - res5
+  neck:
+    type: channel_mapper
+    in_features:
+    - res3
+    - res4
+    - res5
+    out_channels: 256
+    num_outs: 4
+    kernel_size: 1
+    use_group_norm: true
+  position_embedding:
+    num_pos_feats: 128
+    temperature: 10000
+    normalize: true
+    offset: -0.5
+  transformer:
+    num_feature_levels: 4
+    encoder:
+      embed_dim: 256
+      num_heads: 8
+      feedforward_dim: 2048
+      attn_dropout: 0.0
+      ffn_dropout: 0.0
+      num_layers: 6
+      post_norm: false
+      num_feature_levels: 4
+      use_checkpoint: false
+    decoder:
+      embed_dim: 256
+      num_heads: 8
+      feedforward_dim: 2048
+      attn_dropout: 0.0
+      ffn_dropout: 0.0
+      num_layers: 6
+      return_intermediate: true
+      num_feature_levels: 4
+      use_checkpoint: false
+  criterion:
+    loss_class_type: focal_loss
+    alpha: 0.25
+    gamma: 2.0
+    two_stage_binary_cls: false
+    matcher:
+      cost_class: 2.0
+      cost_bbox: 5.0
+      cost_giou: 2.0
+      cost_class_type: focal_loss_cost
+      alpha: 0.25
+      gamma: 2.0
+    weight_dict:
+      loss_class: 1.0
+      loss_bbox: 5.0
+      loss_giou: 2.0
+      loss_class_dn: 1.0
+      loss_bbox_dn: 5.0
+      loss_giou_dn: 2.0
+class_names:
+  0: tomato
+train:
+  device: cuda
+  batch_size: 4
+  total_batch_size: 12
+  gradient_accumulation_steps: 3
+  max_epochs: 2
+  eval_period_epochs: 1
+  log_period: 20
+  num_workers: 4
+  amp:
+    enabled: false
+  ema:
+    enabled: false
+    decay: 0.999
+  early_stopping:
+    enabled: true
+    metric: bbox/AP
+    mode: max
+    patience: 10
+  clip_grad:
+    enabled: true
+    max_norm: 0.1
+    norm_type: 2
+  optimizer:
+    name: AdamW
+    lr: 0.0001
+    betas:
+    - 0.9
+    - 0.999
+    weight_decay: 0.0005
+    lr_factor_rules:
+    - contains:
+      - backbone
+      - reference_points
+      - sampling_offsets
+      factor: 0.05
+  scheduler:
+    name: warmup_multistep
+    values:
+    - 1.0
+    - 0.1
+    milestones_epochs:
+    - 120
+    - 140
+    warmup:
+      epochs: 1
+      method: linear
+      factor: 0.001
+data:
+  image_format: RGB
+  num_workers: 4
+  pin_memory: true
+  imgsz: 640
+  train_augmentation:
+  - type: RandomFlip
+  - type: ResizeShortestEdge
+    short_edge_length:
+    - 640
+    max_size: 640
+    sample_style: choice
+  val_augmentation:
+  - type: ResizeShortestEdge
+    short_edge_length: 640
+    max_size: 640
+val:
+  split: test
+  conf_threshold: 0.01
+  score_threshold_prf1: 0.5
+  iou_threshold_prf1: 0.5
+predict:
+  conf: 0.25
+  splits:
+  - test
+  save_visualizations: false
+metrics:
+- mAP50
+- mAP50_95
+notes:
+- ag_rob_tomato smoke test 전용 config (max_epochs=2). 본 학습은 dino_1cls.yaml(max_epochs
+  150) 사용.

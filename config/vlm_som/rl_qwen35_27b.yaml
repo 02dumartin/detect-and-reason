@@ -1,0 +1,41 @@
+model_id: Qwen/Qwen3.5-27B
+
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  # sft_qwen35_27b.yaml과 동일한 이유 (Qwen3.5 하이브리드 Attention+GatedDeltaNet
+  # 아키텍처, 2026-09-14 확인) — GatedDeltaNet 프로젝션도 반드시 포함해야 한다.
+  target_modules: [q_proj, k_proj, v_proj, o_proj, in_proj_qkv, in_proj_z, in_proj_b, in_proj_a, out_proj]
+
+train:
+  steps: 200
+  lr: 5.0e-5
+  eval_every: 20
+  max_train: 0
+  max_eval: 0 # 0 = 전체(val/test split 그대로) -- 데이터셋마다 크기가 달라 고정 상한이 부적절함(2026-09-14)
+  oversample_max_factor: 16 # sft_qwen35_27b.yaml과 동일 (som_common.oversample_by_class)
+  sft_ce_weight: 0.5 # GRPO-lite loss에 더할 보조 SFT CE 가중치
+  temperature: 1.0
+
+  # k(같은 VQA에서 샘플링할 응답 수)는 VRAM에 따라 자동 결정하되 상한만 여기서 지정.
+  # 27B는 4B보다 활성화 메모리를 훨씬 많이 먹으므로 임계값을 4B 기준(rl.yaml)보다
+  # 높여뒀다 -- 실제 값은 첫 실행 로그(available free GB)를 보고 조정할 것.
+  k_by_free_gb:
+    - {min_free_gb: 60, k: 4}
+    - {min_free_gb: 35, k: 3}
+    - {min_free_gb: 0, k: 2}
+
+proposal:
+  # sft_qwen35_27b.yaml과 같은 이유로 train도 yolo_world로 맞춤(2026-09-14).
+  family: yolo_world
+  conf: 0.1
+  max_boxes: 20
+
+icl:
+  n_exemplars: 2
+
+generation:
+  # sft_qwen35_27b.yaml과 동일한 이유 -- zero-shot(vLLM)과 같은 예산으로 맞춰서
+  # hf 경로에서 마크 많은 이미지의 JSON이 잘리는 문제를 없앤다(2026-09-14 확인).
+  max_new_tokens: 768

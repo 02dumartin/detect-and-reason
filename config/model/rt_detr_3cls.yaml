@@ -32,7 +32,8 @@ train:
     hsv_v: 0.2
   
   patience: 30
-  amp: true
+  amp: false # ultralytics 자체 문서 경고(bipartite matching NaN) + 실측 확인(2026-09-11)로 비활성화
+  backbone_lr_factor: 0.1 # HGNetV2 backbone에 lr*0.1 적용 (src/model/rt_detr.py:RTDETRTrainerWithBackboneLR)
   optimizer: AdamW
   lr0: 0.001
   lrf: 0.01
@@ -105,3 +106,4 @@ notes:
   - big, tomatod, merge use default iou=0.55
   - little uses default iou=0.45
   - if you retrain with rtdetr-x.pt later, change model.init_weight only
+  - amp:false + backbone_lr_factor:0.1 (2026-09-11 ag_rob_tomato smoke test로 검증: mAP50 0.039->0.271(3cls), 0.105->0.830(1cls))

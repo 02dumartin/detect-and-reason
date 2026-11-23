@@ -53,6 +53,20 @@ def parse_args() -> argparse.Namespace:
         help="Predict confidence threshold override (predict stage only). "
         "예: mAP/best-F1 산출용 저conf 예측은 --conf 0.001.",
     )
+    parser.add_argument(
+        "--iou",
+        type=float,
+        help="Predict NMS IoU threshold override (predict stage only). "
+        "데이터셋마다 iou_default가 달라서(config/model/*.yaml), 여러 데이터셋에 "
+        "동일 iou를 강제로 맞추고 싶을 때 사용 (예: --iou 0.5).",
+    )
+    parser.add_argument(
+        "--text-threshold",
+        type=float,
+        help="Grounding DINO zero-shot text_threshold override (predict stage only). "
+        "box_threshold(--conf)와 별개로 phrase-매칭 confidence를 거르는 하드 필터라서, "
+        "recall 상한을 보려면 이것도 같이 낮춰야 한다.",
+    )
 
     return parser.parse_args()
 
@@ -73,9 +87,13 @@ def main() -> None:
         source=args.source,
     )
 
-    # predict conf override (mAP/best-F1 산출용 저conf 예측 등)
+    # predict conf/iou override (mAP/best-F1 산출용 저conf 예측, 데이터셋 간 iou 통일 등)
     if args.stage == "predict" and args.conf is not None:
         runtime_cfg.setdefault("predict", {})["conf"] = args.conf
+    if args.stage == "predict" and args.iou is not None:
+        runtime_cfg.setdefault("predict", {})["resolved_iou"] = args.iou
+    if args.stage == "predict" and args.text_threshold is not None:
+        runtime_cfg.setdefault("model", {})["text_threshold"] = args.text_threshold
 
     _print_runtime_summary(runtime_cfg)
 

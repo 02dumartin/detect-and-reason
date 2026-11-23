@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any
 
-from .schema import normalize_prediction_label
+from .schema import normalize_class_name, normalize_prediction_label
 
 
 _JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
@@ -29,6 +29,7 @@ def parse_vlm_response(
     text: str,
     bbox_fallback_xyxy: list[float],
     require_reasoning: bool,
+    class_name_map: dict[int, str] | list[str] | None = None,
 ) -> dict[str, Any]:
     raw = (text or "").strip()
     parsed_payload: dict[str, Any] | None = None
@@ -38,10 +39,11 @@ def parse_vlm_response(
         parsed_payload = json.loads(extract_first_json(raw))
     except Exception as exc:
         parse_error = str(exc)
-        parsed_payload = _recover_payload_from_text(raw)
+        parsed_payload = _recover_payload_from_text(raw, class_name_map=class_name_map)
 
     class_id, class_name = normalize_prediction_label(
         class_name=(parsed_payload or {}).get("class_name") or (parsed_payload or {}).get("tomato"),
+        class_name_map=class_name_map,
     )
 
     bbox_payload = (parsed_payload or {}).get("bbox")
@@ -69,21 +71,45 @@ def _candidate_json_strings(text: str) -> list[str]:
     return candidates
 
 
-def _recover_payload_from_text(text: str) -> dict[str, Any]:
+def _recover_payload_from_text(text: str, *, class_name_map: dict[int, str] | list[str] | None = None) -> dict[str, Any]:
     lowered = (text or "").lower()
     label = None
-    if "fully-ripe" in lowered or "fully ripe" in lowered or "red tomato" in lowered:
-        label = "fully-ripe"
-    elif "semi-ripe" in lowered or "semi ripe" in lowered or "half ripe" in lowered:
-        label = "semi-ripe"
-    elif "unripe" in lowered or "green tomato" in lowered or re.search(r"\bgreen\b", lowered):
-        label = "unripe"
+    if class_name_map is not None:
+        resolved_map = _coerce_class_name_map(class_name_map)
+        for class_id, class_label in sorted(resolved_map.items(), key=lambda item: len(str(item[1])), reverse=True):
+            normalized_label = normalize_class_name(class_label)
+            candidates = {
+                str(class_label).strip().lower(),
+                normalized_label,
+            }
+            if any(candidate and _contains_token(lowered, candidate) for candidate in candidates):
+                label = class_label
+                break
+
+    if label is None:
+        if "fully-ripe" in lowered or "fully ripe" in lowered or "red tomato" in lowered:
+            label = "fully-ripe"
+        elif "semi-ripe" in lowered or "semi ripe" in lowered or "half ripe" in lowered:
+            label = "semi-ripe"
+        elif "unripe" in lowered or "green tomato" in lowered or re.search(r"\bgreen\b", lowered):
+            label = "unripe"
 
     reasoning = _short_reasoning(text)
     return {
         "class_name": label or "none",
         "reasoning": reasoning,
     }
+
+
+def _coerce_class_name_map(class_name_map: dict[int, str] | list[str]) -> dict[int, str]:
+    if isinstance(class_name_map, dict):
+        return {int(key): str(value).strip() for key, value in sorted(class_name_map.items(), key=lambda item: int(item[0]))}
+    return {idx: str(name).strip() for idx, name in enumerate(class_name_map)}
+
+
+def _contains_token(text: str, candidate: str) -> bool:
+    pattern = rf"(?<!\w){re.escape(candidate)}(?!\w)"
+    return re.search(pattern, text) is not None
 
 
 def _short_reasoning(text: str) -> str:

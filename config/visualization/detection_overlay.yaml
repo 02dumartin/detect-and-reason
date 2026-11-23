@@ -1,8 +1,12 @@
 # 예측/정답 overlay 이미지를 만들 때 공통으로 사용할 시각화 설정이다.
 # tomato-detection-agentic 쪽의 기본 색 체계와 굵기 규칙을 그대로 맞춰 두었다.
 overlay:
-  font_path: /usr/share/fonts/truetype/noto/NotoSans-Regular.ttf
-  font_size: 16
+  # 시스템 경로(/usr/share/fonts/truetype/noto/...)가 이 서버엔 실제로 설치돼 있지 않아
+  # _load_font가 조용히 PIL 기본 비트맵 폰트로 fallback했다(2026-09-11 확인, SoM overlay
+  # 쪽과 폰트가 달라 보인 원인) — 리포에 이미 있는 사본으로 고정하고, SoM overlay
+  # 폰트 크기(28pt)에서 -2pt한 값으로 맞춘다.
+  font_path: assets/fonts/NotoSans-Regular.ttf
+  font_size: 26
   box_thickness: 3
   # 이거 수정 필요! - resize된 이미지에 맞게 
 

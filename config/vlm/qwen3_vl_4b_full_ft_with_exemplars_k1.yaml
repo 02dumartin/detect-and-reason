@@ -1,0 +1,57 @@
+name: qwen3_vl_4b_full_ft_with_exemplars_k1
+
+task:
+  target_class_mode: 3cls
+  class_map:
+    0: fully-ripe
+    1: semi-ripe
+    2: unripe
+
+backend:
+  type: qwen_hf
+  model_name: Qwen/Qwen3-VL-4B-Instruct
+  # Full-FT run root; backend resolves the best checkpoint under this directory.
+  model_path: /home/jovyan/aicon-gamma-datavol-1/hjgoh/detect-and-reason/notebook/results/vlm_sft/merge/qwen3_vl_4b_full_ft_with_exemplars_k1/v1-20260705-075139
+  load_mode: full
+  batch_size: 2
+  use_4bit: true
+  compile_model: false
+  device_map: auto
+  torch_dtype: auto
+  trust_remote_code: true
+
+generation:
+  max_new_tokens: 220
+  repetition_penalty: 1.1
+  do_sample: false
+  temperature: 0.2
+  top_p: 0.9
+  top_k: 40
+
+prompt:
+  use_examples: true
+  use_reasoning: true
+  use_color_guide: true
+  include_bbox_json: true
+  reasoning_max_words: 35
+  example_picker:
+    enabled: true
+    manifest_path: data/vlm_sft/merge_3cls_qwen3_vl_full_ft_with_exemplars_k1/manifest.json
+    dataset_ref: merge
+    source_class_mode: 3cls
+    source_split: train
+    per_class: 1
+    max_total_examples: 3
+    resize: 224
+    expand_ratio: 0.1
+    min_size: 32
+
+crop:
+  expand_ratio: 0.1
+  min_size: 32
+
+output:
+  save_overlay: true
+  save_eval: true
+  save_family_export: true
+  overlay_config: config/visualization/detection_overlay.yaml

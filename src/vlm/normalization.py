@@ -118,7 +118,7 @@ def _normalize_coco_predictions(
 
         file_name = str(image_meta["file_name"])
         stem = Path(file_name).stem
-        image_info = image_index.get(stem)
+        image_info = _lookup_image_info(image_index, stem)
         if image_info is None:
             continue
 
@@ -164,6 +164,29 @@ def _normalize_coco_predictions(
         "records": records,
         "image_ids": file_to_image_id,
     }
+
+
+def _lookup_image_info(image_index: dict[str, Any], stem: str):
+    """Find a matching image entry even when split filenames carry a dataset prefix.
+
+    Some YOLO exports store files as `tomatod_<stem>.jpg` while the COCO metadata
+    keeps `<stem>.jpg`. Matching both direct and suffix-stripped keys keeps the
+    VLM pipeline robust across those layouts.
+    """
+    image_info = image_index.get(stem)
+    if image_info is not None:
+        return image_info
+
+    if "_" in stem:
+        suffix = stem.split("_", 1)[1]
+        image_info = image_index.get(suffix)
+        if image_info is not None:
+            return image_info
+        for key, value in image_index.items():
+            if key.endswith(f"_{suffix}"):
+                return value
+
+    return None
 
 
 def _normalize_coco_split_name(split: str) -> str:

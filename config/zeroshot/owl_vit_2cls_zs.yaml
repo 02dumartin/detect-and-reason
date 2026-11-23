@@ -34,7 +34,7 @@ dataset_overrides:
   custom_tomato:
     data_yaml: data/yolo/custom_tomato_2cls/data.yaml
     rfdetr_dir: data/coco/custom_tomato_2cls
-    test_image_source: data/custom_tomato_dataset/custom_tomato_data_yolo/images/test
+    test_image_source: data/yolo/custom_tomato_2cls/test/images
     prediction_dir: result/detection_reasoning/custom_tomato/owl_vit_2cls_zs_prediction
     eval_dir: result/detection_reasoning/custom_tomato/owl_vit_2cls_zs_eval
   rob2pheno:

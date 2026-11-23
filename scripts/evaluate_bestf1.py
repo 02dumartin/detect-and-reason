@@ -21,6 +21,7 @@ import autorootcwd  # noqa: F401  (src 임포트 경로 확보)
 import yaml
 
 from src.config_loader import resolve_runtime_config
+from src.evaluation.llm_classify_metric import boxes_to_llm_classify_pairs, det_score
 from src.evaluation.yolo_label_io import (
     build_image_index,
     resolve_prediction_labels_dir,
@@ -89,15 +90,17 @@ def _build_samples(runtime_cfg: dict, split: str, pred_override: str | None = No
     return samples, str(pred_dir)
 
 
-def _oppoint(samples, t: float, iou: float) -> dict:
-    """conf>=t 로 거른 예측에 대한 동작점 지표(P/R/F1/Loc/Cls/Overall)."""
+def _oppoint(samples, t: float, iou: float, class_names: dict[int, str] | None = None) -> dict:
+    """conf>=t 로 거른 예측에 대한 동작점 지표(P/R/F1/Loc/Cls/Overall/macro-F1)."""
     tg = tp = matched = correct = 0
+    llm_classify_pairs: list[tuple[str, str]] = []
     for s in samples:
-        pb, pl = [], []
+        pb, pl, ps = [], [], []
         for b, l, sc in zip(s.pred_boxes, s.pred_labels, s.pred_scores):
             if sc >= t:
                 pb.append(b)
                 pl.append(l)
+                ps.append(sc)
         tg += len(s.gt_boxes)
         tp += len(pb)
         m, _, _ = _match_boxes(s.gt_boxes, pb, iou)
@@ -105,9 +108,19 @@ def _oppoint(samples, t: float, iou: float) -> dict:
         for gi, pi, _iou in m:
             if s.gt_labels[gi] == pl[pi]:
                 correct += 1
+        if class_names:
+            llm_classify_pairs.extend(
+                boxes_to_llm_classify_pairs(s.gt_boxes, s.gt_labels, pb, pl, ps, class_names, iou)
+            )
     precision = correct / tp if tp else 0.0
     recall = correct / tg if tg else 0.0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
+    macro_f1 = llm_classify_acc = None
+    if class_names:
+        class_list = [class_names[i] for i in sorted(class_names)]
+        llm_classify_result = det_score(llm_classify_pairs, class_list)
+        macro_f1 = llm_classify_result["macro_f1"]
+        llm_classify_acc = llm_classify_result["acc"]  # class-conditioned greedy matching, miss/FP 포함
     return {
         "conf_threshold": round(t, 4),
         "total_ground_truths": tg,
@@ -118,6 +131,8 @@ def _oppoint(samples, t: float, iou: float) -> dict:
         "overall_precision": precision,
         "overall_recall": recall,
         "overall_f1": f1,
+        "macro_f1": macro_f1,
+        "llm_classify_acc": llm_classify_acc,
     }
 
 
@@ -159,7 +174,7 @@ def main() -> None:
                      "conf_threshold": conf_star, "warning": "conf selected on report split (test-tuning)"}
 
     # 3) conf* 를 report split(test)에 적용한 동작점 지표
-    op = _oppoint(report_samples, conf_star, args.iou_threshold)
+    op = _oppoint(report_samples, conf_star, args.iou_threshold, class_names)
 
     result = {
         "evaluation_info": {
@@ -187,6 +202,7 @@ def main() -> None:
         f"[bestf1] test@conf* F1={op['overall_f1']:.4f} "
         f"P={op['overall_precision']:.4f} R={op['overall_recall']:.4f} "
         f"Loc={op['detection_acc']:.4f} Cls={op['classification_acc']:.4f} Overall={op['overall_acc']:.4f} "
+        f"macroF1={op['macro_f1']:.4f} llmClassifyAcc={op['llm_classify_acc']:.4f} "
         f"(pred={op['total_predictions']}/gt={op['total_ground_truths']})"
     )
 

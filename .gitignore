@@ -45,7 +45,12 @@ weights/
 # reuslt and static files
 result/
 benchmark/
-.xlsx
+*.xlsx
 tmp/
 .sh
 src/dino_vendor/
+assets/
+exp/
+
+# notebook caches
+notebook/.*_cache.json

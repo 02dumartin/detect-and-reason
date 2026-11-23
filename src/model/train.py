@@ -47,6 +47,13 @@ def run_train(runtime_cfg: dict):
     }
     kwargs.update(train_cfg.get("augmentation", {}))
 
+    if runtime_cfg.get("family") == "rt_detr":
+        from src.model.rt_detr import resolve_rt_detr_trainer
+
+        trainer_cls = resolve_rt_detr_trainer(runtime_cfg)
+        if trainer_cls is not None:
+            return model.train(trainer=trainer_cls, **_drop_none(kwargs))
+
     return model.train(**_drop_none(kwargs))
 
 

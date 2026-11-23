@@ -12,6 +12,7 @@ from .coco_label_io import (
     load_coco_gt,
     load_coco_predictions,
 )
+from .llm_classify_metric import boxes_to_llm_classify_pairs, det_score
 from .model_complexity import estimate_ultralytics_model_complexity
 from .yolo_label_io import (
     build_image_index,
@@ -146,6 +147,8 @@ def evaluate_detection_samples(
     per_class_fp = defaultdict(int)
     per_class_fn = defaultdict(int)
     confusion = defaultdict(lambda: defaultdict(int))
+    llm_classify_pairs: list[tuple[str, str]] = []
+    llm_classify_confusion: dict[str, dict[str, int]] = {}
 
     for sample in samples:
         num_images += 1
@@ -207,6 +210,18 @@ def evaluate_detection_samples(
         image_classification_acc = correct_match_count / len(matches) if matches else 0.0
         image_overall_acc = correct_match_count / gt_count if gt_count else 0.0
 
+        image_pairs = boxes_to_llm_classify_pairs(
+            gt_boxes, gt_labels, pred_boxes, pred_labels, pred_scores, class_name_map, iou_threshold
+        )
+        llm_classify_pairs.extend(image_pairs)
+        image_llm_classify_correct = sum(g == p for g, p in image_pairs)
+        image_llm_classify_miss = sum(p == "miss" for _, p in image_pairs)
+        image_llm_classify_fp = sum(g == "none" for g, _ in image_pairs)
+        image_llm_classify_acc = image_llm_classify_correct / max(1, len(image_pairs))
+        for gt_cls, pred_cls in image_pairs:
+            llm_classify_confusion.setdefault(gt_cls, {}).setdefault(pred_cls, 0)
+            llm_classify_confusion[gt_cls][pred_cls] += 1
+
         per_image_rows.append(
             {
                 "stem": sample.stem,
@@ -218,6 +233,11 @@ def evaluate_detection_samples(
                 "precision_acc_pct": image_precision_acc * 100.0,
                 "classification_acc_pct": image_classification_acc * 100.0,
                 "overall_acc_pct": image_overall_acc * 100.0,
+                "llm_classify_acc_pct": image_llm_classify_acc * 100.0,
+                "llm_classify_n_pairs": len(image_pairs),
+                "llm_classify_n_correct": image_llm_classify_correct,
+                "llm_classify_n_miss": image_llm_classify_miss,
+                "llm_classify_n_fp": image_llm_classify_fp,
             }
         )
 
@@ -235,6 +255,9 @@ def evaluate_detection_samples(
     detection_acc = matched_gt / total_gt if total_gt else 0.0
     classification_acc = correct_class_matches / matched_gt if matched_gt else 0.0
     overall_acc = correct_class_matches / total_gt if total_gt else 0.0
+
+    llm_classify_class_list = [class_name_map[i] for i in sorted(class_name_map)]
+    llm_classify_result = det_score(llm_classify_pairs, llm_classify_class_list)
 
     per_class_rows = []
     class_statistics = {
@@ -260,6 +283,7 @@ def evaluate_detection_samples(
         class_f1 = _safe_f1(class_precision, class_recall)
         class_ap = map_results["per_class_map_by_id"].get(class_id)
         class_ap_50 = per_class_ap_results.get(class_id, {}).get("ca_map_50")
+        llm_classify_class_stats = llm_classify_result["per_class"].get(class_name, {})
 
         per_class_rows.append(
             {
@@ -275,6 +299,9 @@ def evaluate_detection_samples(
                 "f1": class_f1,
                 "ap_50": class_ap_50,
                 "ap_50_95": class_ap,
+                "llm_classify_precision": llm_classify_class_stats.get("precision"),
+                "llm_classify_recall": llm_classify_class_stats.get("recall"),
+                "llm_classify_f1": llm_classify_class_stats.get("f1"),
             }
         )
 
@@ -315,6 +342,8 @@ def evaluate_detection_samples(
         "detection_acc": detection_acc,
         "classification_acc": classification_acc,
         "overall_acc": overall_acc,
+        "llm_classify_acc": llm_classify_result["acc"],
+        "llm_classify_macro_f1": llm_classify_result["macro_f1"],
     }
 
     return {
@@ -331,6 +360,15 @@ def evaluate_detection_samples(
         "model_complexity": model_complexity,
         "per_class": per_class_rows,
         "per_image": per_image_rows,
+        "llm_classify_style": {
+            "acc": llm_classify_result["acc"],
+            "macro_f1": llm_classify_result["macro_f1"],
+            "per_class": llm_classify_result["per_class"],
+            "n_pairs": llm_classify_result["n_pairs"],
+            "num_images": num_images,
+            "iou_threshold": float(iou_threshold),
+            "confusion": llm_classify_confusion,
+        },
         "confusion": _materialize_confusion(confusion, class_name_map),
         "paths": dict(sources),
         # 기존 스크립트 호환을 위해 이전 키도 함께 남긴다.

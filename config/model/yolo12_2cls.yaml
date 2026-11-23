@@ -67,7 +67,6 @@ dataset_overrides:
     cache: disk
     data_yaml: data/yolo/custom_tomato_2cls/data.yaml
     rfdetr_dir: data/coco/custom_tomato_2cls
-    test_image_source: data/custom_tomato_dataset/custom_tomato_data_yolo/images/test
     runs_dir: runs/custom_tomato/yolo12_2cls
     eval_dir: result/detection_only/custom_tomato/yolo12_2cls_eval
     prediction_dir: result/detection_only/custom_tomato/yolo12_2cls_prediction

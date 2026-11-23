@@ -1,0 +1,17 @@
+iou_threshold: 0.5
+
+targets:
+  - name: rf_detr_1cls_tomatod
+    predictions_coco: result/detection_reasoning/tomatod/rf_detr_1cls_prediction/test/predictions_coco.json
+    gt_coco: data/coco/tomatod_1cls/test/_annotations.coco.json
+
+  - name: rf_detr_3cls_little
+    predictions_coco: result/detection_only/little/rf_detr_3cls_prediction/test/predictions_coco.json
+    gt_coco: data/coco/laboro_little_3cls/test/_annotations.coco.json
+
+  - name: vlm_classify_qwen3_5_ablation_01_baseline_little
+    predictions_coco: exp/260910_vlm-classify-qwen3_5-ablation/output/little/ablation_qwen3_5_01_baseline/prediction_class_coco.json
+    gt_coco: data/coco/laboro_little_3cls/test/_annotations.coco.json
+
+output:
+  exp_dir: exp/260911_llm-classify-style-metrics

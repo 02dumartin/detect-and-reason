@@ -109,6 +109,7 @@ def main() -> None:
         vlm_cfg=vlm_cfg,
         split_override=args.split,
         detector_prediction_dir_override=args.detector_prediction_dir,
+        output_dir=output_dir,
     )
     save_classification_outputs(output_dir=output_dir, classification_result=classification_result)
 

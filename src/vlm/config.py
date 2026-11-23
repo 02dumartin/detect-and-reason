@@ -48,12 +48,37 @@ DEFAULT_VLM_CONFIG: dict[str, Any] = {
         "use_examples": False,
         "use_color_guide": True,
         "include_bbox_json": True,
-        "reasoning_max_words": 25,
+        "reasoning_max_words": 35,
+        "ambiguous_tie_break": "none",
+        "use_full_overlay": False,
+        "overlay_font_size": 36,
+        "overlay_box_thickness": 3,
+        "color_signal": {
+            "mode": "none",
+            "multi_point": {
+                "num_points": 7,
+                "exclude_border_ratio": 0.15,
+                "patch_radius": 2,
+                "uniformity_thresholds": {"low_max_hue_std": 5.0, "high_min_hue_std": 15.0},
+            },
+            "swatch": {
+                "count": 6,
+                "hue_range_deg": [20.0, 130.0],
+                "lightness": 55.0,
+                "chroma": 55.0,
+                "attach_to_crop": False,
+                "swatch_width": 60,
+                "gap": 6,
+                "save_debug_images": False,
+            },
+            "swatch_reasoning_hint": False,
+        },
         "system_message": None,
         "instruction": None,
         "examples": [],
         "example_picker": {
             "enabled": False,
+            "manifest_path": None,
             "source_split": "train",
             "per_class": 2,
             "max_total_examples": None,
@@ -98,7 +123,9 @@ def resolve_vlm_config_path(config_ref: str, *, project_root: Path) -> Path:
 def merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     merged = deepcopy(base)
     for key, value in override.items():
-        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+        if key in {"class_map", "class_names"}:
+            merged[key] = value
+        elif isinstance(value, dict) and isinstance(merged.get(key), dict):
             merged[key] = merge_dicts(merged[key], value)
         else:
             merged[key] = value

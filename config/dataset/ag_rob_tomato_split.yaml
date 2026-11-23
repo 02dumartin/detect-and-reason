@@ -1,0 +1,25 @@
+seed: 42
+ratios:
+  train: 0.8
+  val: 0.1
+  test: 0.1
+
+source:
+  voc_root: data/raw/ag-rob-tomato/Dataset-Greenhouse_Tomato_AgRob
+  ignore_labels:
+    - background
+    - breaking
+
+  # 기존 3cls 데이터셋(laboro_*_3cls 등)과 동일한 taxonomy로 매핑
+  class_mapping:
+    riped: fully ripened tomato
+    reddish: half ripened tomato
+    unriped: green tomato
+
+output:
+  yolo_root: data/yolo/ag_rob_tomato_3cls
+  coco_root: data/coco/ag_rob_tomato_3cls
+  class_names:
+    0: fully ripened tomato
+    1: half ripened tomato
+    2: green tomato
